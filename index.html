@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sırdaş · Yapay zekâya göndermeden veri maskeleme</title>
+<meta name="description" content="Excel tablosunda ya da metinde seçtiğin sütun, satır ve hücreleri yapay zekâya göndermeden önce maskele, yanıtı geri aç. Sayılar ve tarihler hesap bozulmadan gizlenir. Tarayıcıda çalışır, veri hiçbir sunucuya gitmez.">
+<link rel="canonical" href="https://sirdas.ysfdurak.com/">
+<link rel="alternate" hreflang="tr" href="https://sirdas.ysfdurak.com/">
+<link rel="alternate" hreflang="en" href="https://sirdas.ysfdurak.com/en/">
+<link rel="alternate" hreflang="x-default" href="https://sirdas.ysfdurak.com/">
+<script>(function(){try{var q=new URLSearchParams(location.search),p=q.get('lang'),k='sirdas_dil',git=function(){q.delete('lang');var s=q.toString();location.replace('/en/'+(s?'?'+s:'')+location.hash);};
+if(p==='tr'||p==='en'){localStorage.setItem(k,p);if(p==='en')git();return;}
+if(/bot|crawl|spider|slurp|lighthouse/i.test(navigator.userAgent))return;
+var s=localStorage.getItem(k);if(s==='en'){git();return;}
+if(!s&&!(navigator.languages||[navigator.language]).some(function(l){return /^tr/i.test(l||'');}))git();}catch(e){}})();</script>
+<meta property="og:type" content="website">
+<meta property="og:title" content="Sırdaş · Yapay zekâya göndermeden veri maskeleme">
+<meta property="og:description" content="Excel tablosunda ya da metinde seçtiğin sütun, satır ve hücreleri yapay zekâya göndermeden önce maskele, yanıtı geri aç. Sayılar ve tarihler hesap bozulmadan gizlenir. Tarayıcıda çalışır, veri hiçbir sunucuya gitmez.">
+<meta property="og:url" content="https://sirdas.ysfdurak.com/">
+<meta property="og:image" content="https://sirdas.ysfdurak.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#14222B">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/lib/fonts/fonts.css">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<style>
+/* Düzen: yukarıdan aşağı bir iş masası. Seç → kontrol et → gönder → yanıtı aç. Anahtar defteri iki ucun arasında durur.
+   İmza öğesi: karartma çubuğu (redaction bar). */
+:root {
+  --paper: #E9EEF0; --sheet: #FBFCFC; --ink: #14222B; --muted: #52636C; --rule: #C6D1D6;
+  --bar: #14222B; --bar-text: #F2F6F7; --accent: #0A6767; --accent-text: #FFFFFF;
+  --tint: #E3EDEC; --back: #BFEBDD; --back-text: #0C3A30; --warn: #7A4A00; --warn-bg: #FAE9C8;
+  --xval: #DCE6F7; --xval-text: #1B3563; --good: #1E6A3A; --good-bg: #DDF1E2;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0F171C; --sheet: #172229; --ink: #E7EEF0; --muted: #9AABB2; --rule: #2F3F48;
+  --bar: #E7EEF0; --bar-text: #0F171C; --accent: #55C7B9; --accent-text: #08201D;
+  --tint: #203239; --back: #17493F; --back-text: #C8F2E5; --warn: #F2C574; --warn-bg: #3A2D13;
+  --xval: #22345A; --xval-text: #CFDCF7; --good: #8FD9A8; --good-bg: #173726; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #0F171C; --sheet: #172229; --ink: #E7EEF0; --muted: #9AABB2; --rule: #2F3F48;
+  --bar: #E7EEF0; --bar-text: #0F171C; --accent: #55C7B9; --accent-text: #08201D;
+  --tint: #203239; --back: #17493F; --back-text: #C8F2E5; --warn: #F2C574; --warn-bg: #3A2D13;
+  --xval: #22345A; --xval-text: #CFDCF7; --good: #8FD9A8; --good-bg: #173726; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--paper); color: var(--ink); font: 400 15px/1.55 var(--body) }
+button, input, select, textarea { font: inherit; color: inherit }
+a { color: var(--accent) }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 36px }
+header { display: grid; gap: 12px }
+.brand { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; font: 600 13px/1.3 var(--mono); letter-spacing: .06em }
+.brand-r { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px }
+.local { font: 500 13px/1.35 var(--body); color: var(--muted); letter-spacing: 0 }
+.lang { display: inline-flex; border: 1px solid var(--rule) }
+.lang a, .lang button { font: 600 12px/1 var(--mono); padding: 6px 9px; border: 0; background: transparent; color: var(--muted); text-decoration: none; cursor: pointer; min-height: 28px; display: inline-flex; align-items: center }
+.lang [aria-current="true"] { background: var(--bar); color: var(--bar-text) }
+h1 { margin: 0; font: 700 clamp(30px, 5.4vw, 58px)/1.08 var(--display); letter-spacing: -.02em; text-wrap: balance; max-width: 19ch }
+.bigbar { font: 600 .8em/1 var(--mono); letter-spacing: -.03em; background: var(--bar); color: var(--bar-text); border: 0; padding: .1em .24em .14em; cursor: pointer; vertical-align: .03em; transition: background .18s, color .18s }
+.bigbar[aria-pressed="true"] { background: var(--back); color: var(--back-text) }
+.lede { margin: 0; max-width: 68ch; color: var(--muted); font-size: 16px }
+
+section { display: grid; gap: 14px; min-width: 0 }
+.head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline }
+h2 { margin: 0; font: 700 25px/1.2 var(--display); letter-spacing: -.01em; text-wrap: balance }
+.step { font: 600 13px/1 var(--mono); color: var(--accent) }
+.hint { margin: 0; color: var(--muted); max-width: 72ch }
+.count { font: 500 14px/1.4 var(--body); color: var(--muted); font-variant-numeric: tabular-nums }
+.status { margin: 0; font-size: 13px; color: var(--muted); min-height: 1.4em }
+
+.tabs { display: flex; border: 1px solid var(--rule); width: fit-content; background: var(--sheet) }
+.tabs button { border: 0; background: transparent; min-height: 36px; padding: 7px 16px; font-weight: 500; cursor: pointer }
+.tabs button[aria-selected="true"] { background: var(--bar); color: var(--bar-text); font-weight: 600 }
+
+.desk, .pane, .ledger, .checkbox { background: var(--sheet); border: 1px solid var(--rule); min-width: 0 }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 46px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--rule) }
+.bar .label { font-weight: 600; font-size: 14px; display: flex; gap: 8px; align-items: center; margin-right: 10px }
+.bar .label.grow { margin-right: auto }
+.bar-sub { background: var(--paper) }
+.bar-sub .label { font-weight: 500; color: var(--muted); font-size: 13px }
+.spacer { margin-right: auto }
+.tag { font: 600 11px/1 var(--mono); letter-spacing: .05em; padding: 3px 5px; background: var(--warn-bg); color: var(--warn) }
+
+button.b, .filebtn { font: 500 13px/1.2 var(--body); background: transparent; border: 1px solid var(--rule); padding: 7px 10px; cursor: pointer; min-height: 32px; position: relative; display: inline-flex; align-items: center; gap: 6px }
+button.b:hover, .filebtn:hover { border-color: var(--ink) }
+button.go { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600 }
+button.go:hover { filter: brightness(1.08); border-color: var(--accent) }
+button.b:disabled { opacity: .5; cursor: default }
+.filebtn:focus-within { outline: 2px solid var(--accent) }
+.filebtn input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer }
+select.s, input.i { font: 500 13px var(--body); padding: 6px 8px; min-height: 32px; background: var(--sheet); border: 1px solid var(--rule); max-width: 100% }
+input.i.mono { font: 600 12px var(--mono) }
+.check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; cursor: pointer }
+.check input { margin: 0; accent-color: var(--accent); width: 15px; height: 15px }
+textarea:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, .tok:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px }
+
+.sheets { display: flex; gap: 0; overflow-x: auto; border-bottom: 1px solid var(--rule); background: var(--paper) }
+.sheets button { border: 0; border-right: 1px solid var(--rule); background: transparent; padding: 7px 12px; font: 500 13px var(--body); white-space: nowrap; cursor: pointer; color: var(--muted); display: inline-flex; gap: 6px; align-items: center }
+.sheets button[aria-selected="true"] { background: var(--sheet); color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent) }
+.sheets button.out { text-decoration: line-through }
+.sheets .n { font: 600 11px var(--mono); color: var(--accent) }
+
+.pastebox { display: grid; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--rule) }
+.pastebox textarea { min-height: 110px; border: 1px solid var(--rule); background: transparent; font: 400 13px/1.5 var(--mono); padding: 8px; resize: vertical }
+.pastebox div { display: flex; gap: 6px }
+.scroll { overflow: auto; max-height: 540px; min-height: 200px; position: relative }
+table.grid { border-collapse: separate; border-spacing: 0; font: 400 13px/1.45 var(--mono); user-select: none; font-variant-numeric: tabular-nums }
+.grid th { position: sticky; top: 0; z-index: 2; background: var(--sheet); padding: 0; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule) }
+.grid th:first-child, .grid td.rn { position: sticky; left: 0; z-index: 1; background: var(--sheet); border-right: 1px solid var(--rule) }
+.grid th:first-child { z-index: 3 }
+.grid th button, .grid td.rn button { border: 0; background: transparent; width: 100%; min-height: 30px; padding: 4px 10px; font: 600 12px/1 var(--mono); color: var(--muted); cursor: pointer }
+.grid th button.on, .grid td.rn button.on { background: var(--bar); color: var(--bar-text) }
+.grid th button.drop { background: transparent; color: var(--muted); text-decoration: line-through; box-shadow: inset 0 0 0 2px var(--bar) }
+.grid td { padding: 5px 9px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); max-width: 280px; min-width: 76px; overflow-wrap: anywhere; cursor: cell; vertical-align: top }
+.grid td:not(.rn):hover { background: var(--tint) }
+.grid tr.headrow td:not(.rn) { font-weight: 600 }
+.grid td.range { background: var(--tint); box-shadow: inset 0 0 0 1px var(--accent) }
+.grid td.dropcol { color: var(--muted); text-decoration: line-through; background: repeating-linear-gradient(135deg, transparent 0 6px, var(--tint) 6px 7px) }
+.gridnote { margin: 0; padding: 8px 12px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule) }
+.empty-grid { display: grid; gap: 8px; justify-items: start; padding: 40px 20px; color: var(--muted) }
+.empty-grid strong { color: var(--ink); font-size: 16px }
+.drag .scroll, .drag textarea { outline: 2px dashed var(--accent); outline-offset: -6px }
+.busy { position: absolute; top: 8px; right: 10px; z-index: 5; font: 600 12px var(--mono); background: var(--bar); color: var(--bar-text); padding: 4px 8px }
+
+.tok { font: 600 .92em/1.3 var(--mono); background: var(--bar); color: var(--bar-text); padding: 1px 4px; white-space: nowrap; cursor: help }
+.xval { background: var(--xval); color: var(--xval-text); padding: 1px 4px; cursor: help }
+.backval { background: var(--back); color: var(--back-text); padding: 1px 3px }
+.numc { border: 0; font: inherit; padding: 0 2px; cursor: pointer; background: transparent; color: inherit; border-bottom: 1px dashed var(--muted) }
+.numc.on { background: var(--back); color: var(--back-text); border-bottom-color: transparent }
+
+.colpanel { display: grid; border-top: 1px solid var(--rule) }
+.colrow { display: grid; grid-template-columns: minmax(120px, 1.2fr) minmax(150px, 1fr) minmax(130px, 1fr) auto auto; gap: 6px 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--rule); font-size: 14px }
+.colrow:last-child { border-bottom: 0 }
+.colrow b { font-weight: 600; overflow-wrap: anywhere; min-width: 0 }
+.colrow .meta { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums }
+.colrow .note { grid-column: 1 / -1; color: var(--muted); font-size: 13px }
+.colrow .note.w { color: var(--warn) }
+.colrow button { min-height: 28px; padding: 3px 8px; font-size: 12px }
+.groups { grid-column: 1 / -1; border: 1px solid var(--rule); background: var(--paper) }
+.groups summary { padding: 7px 10px; cursor: pointer; font-size: 13px; font-weight: 600 }
+.grp { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 14px; padding: 4px 10px 10px; max-height: 280px; overflow: auto }
+.grp label { display: grid; grid-template-columns: minmax(0, 1fr) 130px; gap: 8px; align-items: center; font: 400 13px var(--mono) }
+.grp label span { overflow-wrap: anywhere }
+
+.opts { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center }
+.chips { display: flex; flex-wrap: wrap; gap: 6px }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 10px; font-size: 13px; border: 1px solid var(--rule); cursor: pointer; background: var(--sheet); position: relative; user-select: none }
+.chip input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer }
+.chip::before { content: ""; width: 12px; height: 12px; border: 1px solid var(--muted) }
+.chip:has(input:checked)::before { background: var(--bar); border-color: var(--bar) }
+.chip:has(input:focus-visible) { outline: 2px solid var(--accent) }
+
+.notice { background: var(--warn-bg); color: var(--warn); padding: 10px 12px; display: grid; gap: 8px }
+.notice strong { font-weight: 600 }
+.notice.ok { background: var(--good-bg); color: var(--good) }
+.notice.info { background: var(--tint); color: var(--ink) }
+.notice .row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center }
+.notice code { font: 600 13px/1.4 var(--mono); overflow-wrap: anywhere }
+.notice .row span { font-size: 13px; margin-right: auto }
+.notice button.b { color: inherit; border-color: currentColor; min-height: 30px; padding: 4px 9px }
+
+.panes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
+.pane { display: grid; grid-template-rows: auto minmax(300px, 1fr) }
+.pane textarea, .out { width: 100%; height: 100%; min-height: 300px; max-height: 520px; margin: 0; padding: 12px 14px; border: 0; background: transparent; font: 400 14px/1.65 var(--mono); overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; resize: vertical; display: block }
+.out:empty::before { content: attr(data-empty); color: var(--muted); font-family: var(--body) }
+textarea::placeholder { color: var(--muted); font-family: var(--body) }
+
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0; border-bottom: 1px solid var(--rule) }
+.fact { padding: 12px 14px; border-right: 1px solid var(--rule); display: grid; gap: 2px; min-width: 0 }
+.fact:last-child { border-right: 0 }
+.fact .k { font: 600 11px/1.2 var(--mono); letter-spacing: .06em; color: var(--muted); text-transform: uppercase }
+.fact .v { font: 600 18px/1.3 var(--display); font-variant-numeric: tabular-nums }
+.fact .d { font-size: 13px; color: var(--muted) }
+.checkbody { display: grid; gap: 10px; padding: 12px }
+.sendbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--rule) }
+
+.rows { max-height: 340px; overflow: auto }
+.lrow { display: grid; grid-template-columns: minmax(118px, 190px) minmax(0, 1fr) 140px 64px 104px; gap: 10px; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--rule); font-size: 14px }
+.lrow:last-child { border-bottom: 0 }
+.lrow .val { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; min-width: 0 }
+.lrow .cat, .lrow .n { color: var(--muted); font-size: 13px }
+.lrow .n { text-align: right; font-variant-numeric: tabular-nums }
+.lrow button { padding: 4px 8px; min-height: 30px; font-size: 12px }
+.lrow.off .tok { background: transparent; color: var(--muted); text-decoration: line-through; box-shadow: inset 0 0 0 1px var(--rule) }
+.lrow.off .val { color: var(--muted) }
+.empty { padding: 18px 12px; color: var(--muted) }
+.keyfacts { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 8px 12px; border-bottom: 1px solid var(--rule); font-size: 13px; color: var(--muted) }
+details.vaultd { border-top: 1px solid var(--rule) }
+details.vaultd > summary { padding: 11px 12px; cursor: pointer; font-weight: 600; font-size: 14px }
+.vault { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 0 12px 14px }
+.vault > div { display: grid; gap: 8px; min-width: 0; align-content: start }
+.vault h3 { margin: 0; font: 600 14px var(--body) }
+.vault label { font-size: 13px; font-weight: 500 }
+.vault input.i { width: 100%; font-size: 14px }
+.vault textarea { min-height: 70px; border: 1px solid var(--rule); background: transparent; font: 400 12px/1.45 var(--mono); padding: 8px; resize: vertical }
+.vault .btns { display: flex; flex-wrap: wrap; gap: 6px }
+
+.limits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 28px; border-top: 2px solid var(--ink); padding-top: 14px }
+.limits h3 { margin: 0 0 4px; font: 600 15px/1.3 var(--body) }
+.limits p { margin: 0; color: var(--muted); font-size: 14px }
+footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 14px }
+
+@media (max-width: 820px) {
+  .panes, .vault, .limits { grid-template-columns: minmax(0, 1fr) }
+  .pane { grid-template-rows: auto minmax(240px, 1fr) }
+  .pane textarea, .out { min-height: 240px }
+  .colrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) }
+  .colrow b { grid-column: 1 / -1 }
+  .lrow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "t b" "v v" "c n"; gap: 3px 10px; padding: 9px 12px }
+  .lrow .tokc { grid-area: t } .lrow .val { grid-area: v } .lrow .cat { grid-area: c } .lrow .n { grid-area: n } .lrow button { grid-area: b }
+  .fact { border-right: 0; border-bottom: 1px solid var(--rule) }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <span>SIRDAŞ</span>
+      <span class="brand-r">
+        <span class="local" data-t="localNote">Verin bu sayfadan çıkmaz. Maskeleme tarayıcında çalışır, hiçbir sunucuya gönderilmez.</span>
+        <span class="lang" id="langSwitch" role="group" aria-label="Dil / Language"></span>
+      </span>
+    </div>
+    <h1><button class="bigbar" id="demoBar" type="button" aria-pressed="false" data-ttl="demoTitle" title="Örtüyü aç veya kapat">[OPERASYON_1]</button> <span data-t="heroRest">yapay zekâya gitmesin.</span></h1>
+    <p class="lede" data-t="lede">Gizlemek istediğin sütunu, satırı ya da hücreyi seç. Operasyon adı, müşteri kodu, maliyet: verinin kişisel olması gerekmez. Sırdaş seçtiklerini etiketler, sayıları ve tarihleri hesap bozulmadan gizler, yanıt gelince istersen hepsini geri açar.</p>
+  </header>
+
+  <section aria-labelledby="h-mask">
+    <div class="head"><span class="step" data-t="step1">ADIM 1</span><h2 id="h-mask" data-t="h1">Neyi gizleyeceğini seç</h2><span class="count" id="stats"></span></div>
+    <div class="tabs" role="tablist" data-tal="tabsAria" aria-label="Veri türü">
+      <button type="button" role="tab" id="tabTable" aria-selected="true" aria-controls="viewTable" data-t="tabTable">Tablo</button>
+      <button type="button" role="tab" id="tabText" aria-selected="false" aria-controls="viewText" data-t="tabText">Metin</button>
+    </div>
+
+    <div class="desk" id="viewTable" role="tabpanel" aria-labelledby="tabTable">
+      <div class="bar">
+        <span class="label"><span data-t="tableLabel">Tablo</span> <span class="tag" id="sampleTag" data-t="sample">ÖRNEK</span></span>
+        <span class="filebtn"><span data-t="openFile">Dosya aç</span><input type="file" id="file" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt,.md,.json,.log,.xml,.docx" data-tal="openFile" aria-label="Dosya aç"></span>
+        <button type="button" class="b" id="pasteToggle" data-t="pasteTable">Tablo yapıştır</button>
+        <label class="check"><input type="checkbox" id="hdrChk" checked><span data-t="firstRowHeader">İlk satır başlık</span></label>
+        <label class="check" id="includeWrap" hidden><input type="checkbox" id="includeChk" checked><span data-t="includeSheet">Bu sayfa dosyaya girsin</span></label>
+        <span class="spacer"></span>
+        <button type="button" class="b" id="clearSel" data-t="clearSel">Seçimi temizle</button>
+      </div>
+      <div class="bar bar-sub" id="tplBar">
+        <span class="label" data-t="templates">Şablon</span>
+        <select class="s" id="tplSel" data-tal="templates" aria-label="Şablon"></select>
+        <button type="button" class="b" id="tplApply" data-t="apply">Uygula</button>
+        <button type="button" class="b" id="tplDelete" data-t="delete">Sil</button>
+        <span class="spacer"></span>
+        <input class="i" id="tplName" maxlength="40" data-tph="tplNamePh" placeholder="Şablon adı" data-tal="tplNamePh" aria-label="Şablon adı">
+        <button type="button" class="b" id="tplSave" data-t="saveTpl">Seçimi şablon yap</button>
+        <button type="button" class="b" id="tplExport" data-t="exportTpl">Dosyaya al</button>
+        <span class="filebtn"><span data-t="importTpl">Dosyadan yükle</span><input type="file" id="tplImport" accept=".json" data-tal="importTpl" aria-label="Dosyadan yükle"></span>
+      </div>
+      <div class="notice info" id="tplSuggest" hidden></div>
+      <div class="sheets" id="sheetTabs" role="tablist" data-tal="sheetsAria" aria-label="Excel sayfaları" hidden></div>
+      <div class="pastebox" id="pasteBox" hidden>
+        <label for="pasteArea" data-t="pasteHelp">Excel'den kopyaladığın hücreleri buraya yapıştır.</label>
+        <textarea id="pasteArea" spellcheck="false"></textarea>
+        <div><button type="button" class="b go" id="pasteApply" data-t="toTable">Tabloya çevir</button><button type="button" class="b" id="pasteCancel" data-t="cancel">Vazgeç</button></div>
+      </div>
+      <div class="scroll" id="gridWrap" tabindex="-1"></div>
+      <p class="gridnote" id="gridNote"></p>
+      <div class="colpanel" id="colPanel"></div>
+    </div>
+
+    <div class="panes" id="viewText" role="tabpanel" aria-labelledby="tabText" hidden>
+      <div class="pane" id="dropText">
+        <div class="bar">
+          <label class="label grow" for="source" data-t="srcText">Asıl metin</label>
+          <input class="i mono" id="selLabel" data-tph="labelPh" placeholder="Etiket" maxlength="24" data-tal="selLabelAria" aria-label="Seçim için etiket adı" style="width:104px">
+          <button type="button" class="b" id="maskSel" data-t="maskSel">Seçimi maskele</button>
+          <button type="button" class="b" id="clearSrc" data-t="clear">Temizle</button>
+        </div>
+        <textarea id="source" spellcheck="false" data-tph="srcPh" placeholder="Metni yapıştır, gizlemek istediğin parçayı seç, Seçimi maskele'ye bas."></textarea>
+      </div>
+      <div class="pane">
+        <div class="bar">
+          <span class="label grow" data-t="outText">Yapay zekâya gidecek metin</span>
+          <button type="button" class="b" id="nextMsg" data-t="nextMsg" data-ttl="nextMsgTitle" title="Etiketleri korur, yeni metin için alanı boşaltır">Sonraki mesaj</button>
+        </div>
+        <div class="out" id="preview" tabindex="0" data-empty="Maskelenen metin burada görünecek."></div>
+      </div>
+    </div>
+
+    <div class="opts">
+      <label class="check" id="propWrap"><input type="checkbox" id="propChk" checked><span data-t="optProp">Seçtiğim değerler başka hücrede geçerse orada da gizle</span></label>
+      <label class="check" id="sheetNameWrap"><input type="checkbox" id="sheetNameChk" checked><span data-t="optSheetNames">Sayfa adlarını gizle</span></label>
+      <label class="check"><input type="checkbox" id="autoChk"><span data-t="optAuto">Kişisel verileri de otomatik bul</span></label>
+    </div>
+    <div class="chips" id="catChips" role="group" data-tal="catsAria" aria-label="Otomatik bulunacak veri türleri" hidden></div>
+    <div class="notice" id="suggestBox" hidden></div>
+    <p class="status" id="fileStatus" role="status"></p>
+  </section>
+
+  <section aria-labelledby="h-check">
+    <div class="head"><span class="step" data-t="step2">ADIM 2</span><h2 id="h-check" data-t="h2">Göndermeden kontrol et</h2></div>
+    <div class="checkbox">
+      <div class="facts" id="facts"></div>
+      <div class="checkbody" id="checkBody"></div>
+      <div class="sendbar">
+        <button type="button" class="b go" id="copyOut" data-t="copy">Kopyala</button>
+        <button type="button" class="b" id="saveXlsx" data-t="saveXlsx">Excel indir</button>
+        <span class="status" id="sendStatus" role="status"></span>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-key">
+    <div class="head"><h2 id="h-key" data-t="hKey">Anahtar defteri</h2><span class="count" id="keyNote" data-t="keyNote">Sayfayı kapatınca silinir. Saklamak için anahtar dosyası al.</span></div>
+    <p class="hint" data-t="keyHint">Hangi etiketin hangi değere karşılık geldiğini, sayıların katsayısını ve tarihlerin kaydırmasını tutar. Aynı değer her mesajda aynı etiketi alır, bu sayede yapay zekâ kişileri ve operasyonları birbirine karıştırmaz.</p>
+    <div class="ledger">
+      <div class="keyfacts" id="keyFacts"></div>
+      <div class="rows" id="rows"></div>
+      <details class="vaultd" id="vaultBox">
+        <summary data-t="vaultSum">Anahtarı sakla veya geri yükle</summary>
+        <div class="vault">
+          <div>
+            <h3 data-t="vaultSave">Sakla</h3>
+            <label for="passOut" data-t="passNew">Parola (en az 8 karakter)</label>
+            <input class="i" id="passOut" type="password" autocomplete="new-password">
+            <div class="btns"><button type="button" class="b go" id="keySave" data-t="keySave">Anahtar dosyasını indir</button><button type="button" class="b" id="keyCopy" data-t="keyCopy">Metin olarak kopyala</button></div>
+            <textarea id="keyOut" readonly data-tal="keyOutAria" aria-label="Şifreli anahtar" data-tph="keyOutPh" placeholder="Şifreli anahtar burada görünür. Parola olmadan açılamaz." hidden></textarea>
+            <p class="status" id="exportStatus" role="status"></p>
+          </div>
+          <div>
+            <h3 data-t="vaultLoad">Geri yükle</h3>
+            <span class="filebtn" style="width:fit-content"><span data-t="keyOpen">Anahtar dosyası seç</span><input type="file" id="keyFile" accept=".json,.txt" data-tal="keyOpen" aria-label="Anahtar dosyası seç"></span>
+            <label for="keyIn" data-t="keyPaste">ya da şifreli metni yapıştır</label>
+            <textarea id="keyIn" spellcheck="false" placeholder="SIRDAS1."></textarea>
+            <label for="passIn" data-t="pass">Parola</label>
+            <input class="i" id="passIn" type="password" autocomplete="current-password">
+            <div class="btns"><button type="button" class="b go" id="keyLoad" data-t="keyLoad">Anahtarı yükle</button></div>
+            <p class="status" id="importStatus" role="status"></p>
+          </div>
+        </div>
+      </details>
+      <div class="bar" style="border-bottom:0;border-top:1px solid var(--rule);justify-content:flex-end"><button type="button" class="b" id="resetAll" data-t="reset">Yeni oturum başlat</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-back">
+    <div class="head"><span class="step" data-t="step3">ADIM 3</span><h2 id="h-back" data-t="h3">Yanıtı aç</h2></div>
+    <p class="hint" data-t="backHint">İsteğe bağlı. Yanıtı yapıştırınca etiketler anında çevrilir. Altı çizili sayılar katsayıyla geri çevrilebilir: tıklayınca açılır ya da kapanır. Yanıt Excel dosyası olarak geldiyse onu aç, açılmış halini indir.</p>
+    <div class="panes">
+      <div class="pane">
+        <div class="bar"><label class="label grow" for="reply"><span data-t="replyLabel">Yapay zekânın yanıtı</span> <span class="tag" id="replyTag" data-t="sample">ÖRNEK</span></label>
+          <span class="filebtn" id="replyXlsxBtn"><span data-t="replyXlsx">Excel yanıtı aç</span><input type="file" id="replyXlsx" accept=".xlsx,.xls,.xlsm,.ods" data-tal="replyXlsx" aria-label="Excel yanıtı aç"></span>
+          <button type="button" class="b" id="clearReply" data-t="clear">Temizle</button></div>
+        <textarea id="reply" spellcheck="false" data-tph="replyPh" placeholder="Yanıtı buraya yapıştır."></textarea>
+      </div>
+      <div class="pane">
+        <div class="bar"><span class="label grow" data-t="restoredLabel">Eski haline dönmüş metin</span><button type="button" class="b go" id="copyRestored" data-t="copy">Kopyala</button></div>
+        <div class="out" id="restored" tabindex="0" data-empty="Gerçek değerler burada görünecek."></div>
+      </div>
+    </div>
+    <div class="opts" id="backOpts"></div>
+    <div class="chips" id="backChips" role="group" data-tal="backChipsAria" aria-label="Geri açılacak etiket türleri"></div>
+    <div id="report" style="display:grid;gap:8px"></div>
+    <p class="status" id="replyStatus" role="status"></p>
+  </section>
+
+  <section class="limits" aria-label="Sınırlar" data-tal="limitsAria">
+    <div><h3 data-t="lim1h">Seçmediğin açık gider</h3><p data-t="lim1p">Gizlenmeyen her hücre olduğu gibi gider, sütun başlıkları da. Kontrol adımı açık kalan gizli değerleri ve seçim yapılmamış sayfaları gösterir, yine de göndermeden önce bir kez bak.</p></div>
+    <div><h3 data-t="lim2h">Ölçekleme şifreleme değildir</h3><p data-t="lim2p">Katsayı oranları korur, bu yüzden bir tek gerçek değeri bilen biri katsayıyı bulabilir. Rakamın kendisi çok hassassa aralığa çevir ya da sütunu çıkar. Tarih kaydırması tam haftadır, haftanın günü korunur.</p></div>
+    <div><h3 data-t="lim3h">Anahtar durdukça geri açılır</h3><p data-t="lim3p">Bu anonimleştirme değil, takma adlandırmadır. Anahtar dosyasını ve parolasını ayrı yerlerde tut. Kurum verisinde şirket kuralların ve KVKK yükümlülüklerin geçerliliğini korur.</p></div>
+  </section>
+  <footer>
+    <span>Sırdaş <span id="ver"></span></span>
+    <span data-t="footLicense">PolyForm Shield 1.0.0 lisansı</span>
+    <a href="https://github.com/ysfdurak/sirdas" target="_blank" rel="noopener" data-t="footSource">Kaynak kodu</a>
+    <a href="https://ysfdurak.com" target="_blank" rel="noopener">ysfdurak.com</a>
+  </footer>
+</div>
+<script>window.SIRDAS_ENV={xlsxUrl:'/lib/xlsx.full.min.js',mammothUrl:'/lib/mammoth.browser.min.js',workerUrl:'/src/worker.js'}</script>
+<script src="/src/core.js?v=1.0.0"></script>
+<script src="/src/i18n.js?v=1.0.0"></script>
+<script src="/src/app.js?v=1.0.0"></script>
+<script>if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js').catch(function(){});</script>
+
+</body>
+</html>

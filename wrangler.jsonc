@@ -1,0 +1,10 @@
+// Sırdaş · Cloudflare Workers yayın ayarları (sirdas.ysfdurak.com).
+// Derleme yok: depo kökündeki statik dosyalar olduğu gibi yayınlanır (.assetsignore dışındakiler).
+// index.html ve en/index.html dosyalarını göndermeden önce `npm run build` ile üret.
+// "name", Cloudflare'deki proje adıyla aynı olmalı; farklıysa otomatik derleme çalışmaz.
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "sirdas",
+  "compatibility_date": "2026-11-01",
+  "assets": { "directory": "./" }
+}
