@@ -5,7 +5,7 @@
   "description": "Sırdaş: yapay zekâya göndermeden önce tablo ve metinde seçtiğin değerleri maskeleyen, yanıtı geri açan araç (web + yerel MCP).",
   "scripts": {
     "build": "node tools/build.mjs",
-    "test": "node --test test/ && cd mcp && node --test sunucu.test.mjs",
+    "test": "node --test \"test/*.test.js\" && cd mcp && node --test sunucu.test.mjs",
     "serve": "python3 -m http.server 8000"
   },
   "license": "SEE LICENSE IN LICENSE.md"
