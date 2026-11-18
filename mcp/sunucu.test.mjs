@@ -10,7 +10,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 const require = createRequire(import.meta.url);
 const XLSX = require('../lib/xlsx.full.min.js');
 
-const SECRETS = ['Proje Atlas', 'Kuzey Hattı', 'Selin Aksoy', 'Kerem Tan', 'ACME Müşteri'];
+const SECRETS = ['Proje Atlas', 'Kuzey Hattı', 'Selin Aksoy', 'Kerem Tan', 'ACME Müşteri', '10000000146', '412000', '268500'];
 
 test('MCP: maskele, AI yanıtını kaydet, dosyayı geri aç; gerçek değer AI tarafına hiç gitmez', async () => {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'sirdas-'));
@@ -29,6 +29,7 @@ test('MCP: maskele, AI yanıtını kaydet, dosyayı geri aç; gerçek değer AI 
   const client = new Client({ name: 'test', version: '1' });
   await client.connect(transport);
   const seen = [];
+  try {
   const call = async (name, args) => { const r = await client.callTool({ name, arguments: args }); const txt = r.content.map(c => c.text).join(''); seen.push(txt); if (r.isError) throw new Error(txt); return JSON.parse(txt); };
 
   const tools = (await client.listTools()).tools.map(t => t.name).sort();
@@ -49,7 +50,7 @@ test('MCP: maskele, AI yanıtını kaydet, dosyayı geri aç; gerçek değer AI 
 
   const y = await call('yaniti_kaydet', { metin: `[OPERASYON_1] en pahalısı: ${cost} TL. Sorumlusu [SORUMLU_1].`, cikti: path.join(dir, 'yanit.md') });
   assert.equal(y.geri_acilan_etiket, 2);
-  assert.match(readFileSync(path.join(dir, 'yanit.md'), 'utf8'), /^Proje Atlas en pahalısı: 41(1999|2000|2001) TL\. Sorumlusu Selin Aksoy\.$/);
+  assert.match(readFileSync(path.join(dir, 'yanit.md'), 'utf8'), /^Proje Atlas en pahalısı: 412000 TL\. Sorumlusu Selin Aksoy\.$/);
 
   const g = await call('geri_ac_dosya', { dosya: m.cikti });
   const back = XLSX.read(readFileSync(g.cikti), { cellDates: true });
@@ -61,8 +62,29 @@ test('MCP: maskele, AI yanıtını kaydet, dosyayı geri aç; gerçek değer AI 
   assert.equal(k.sifreli, true);
   assert.ok(!readFileSync(path.join(home, 'anahtar.json'), 'utf8').includes('Proje Atlas'));
 
+  // Word, PowerPoint, JSON, PDF: aynı anahtar, biçim korunur, gerçek değer AI tarafına gitmez
+  const ornek = path.join(import.meta.dirname, '..', 'test', 'ornek');
+  for (const f of ['rapor.docx', 'sunum.pptx', 'belge.pdf']) writeFileSync(path.join(dir, f), readFileSync(path.join(ornek, f)));
+  writeFileSync(path.join(dir, 'kayit.json'), JSON.stringify({ kayitlar: [{ operasyon: 'Proje Atlas', tutar: 412000 }, { operasyon: 'Kuzey Hattı', tutar: 268500 }] }, null, 2));
+  const w = await call('maskele_dosya', { dosya: path.join(dir, 'rapor.docx'), terimler: ['Proje Atlas', 'Kuzey Hattı'] });
+  assert.match(w.onizleme, /\[OPERASYON_1\] haftalık rapor/, 'bilinen değer aynı etiketi almalı');
+  assert.ok(w.ozet.temizlenen.properties > 0);
+  const wr = await call('geri_ac_dosya', { dosya: w.cikti });
+  assert.ok(wr.geri_acilan > 0 && existsSync(wr.cikti));
+  const pp = await call('maskele_dosya', { dosya: path.join(dir, 'sunum.pptx') });
+  assert.match(pp.onizleme, /\[OPERASYON_1\] durumu/);
+  const fl = await call('basliklari_goster', { dosya: path.join(dir, 'kayit.json') });
+  assert.deepEqual(fl.alanlar.map(a => a.yol), ['kayitlar[].operasyon', 'kayitlar[].tutar']);
+  const js = await call('maskele_dosya', { dosya: path.join(dir, 'kayit.json'), alanlar: [{ yol: 'kayitlar[].tutar', islem: 'scale' }] });
+  assert.match(js.onizleme, /"operasyon": "\[OPERASYON_1\]"/);
+  const jr = await call('geri_ac_dosya', { dosya: js.cikti });
+  assert.deepEqual(JSON.parse(readFileSync(jr.cikti, 'utf8')).kayitlar.map(k => k.tutar), [412000, 268500]);
+  const pd = await call('maskele_dosya', { dosya: path.join(dir, 'belge.pdf') });
+  assert.match(pd.onizleme, /\[OPERASYON_1\] raporu: \[SORUMLU_1\] \(T\.C\. \[TCKN_1\]\)/);
+  assert.match(pd.cikti, /\.maskeli\.txt$/);
+
   await assert.rejects(() => call('basliklari_goster', { dosya: path.join(tmp, 'disarida.xlsx') }), /izin yok/);
-  await client.close();
+  } finally { await client.close(); }
 
   const all = seen.join('\n');
   for (const s of SECRETS) assert.ok(!all.includes(s), `AI tarafına sızdı: ${s}`);

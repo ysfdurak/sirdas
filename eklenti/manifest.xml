@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Sırdaş Excel eklentisi. Yükleme: docs/EKLENTI.md. Adresler sirdas.ysfdurak.com'u gösterir; kurum içinde
+     kendi sunucunda yayınlıyorsan tüm https://sirdas.ysfdurak.com adreslerini kendi adresinle değiştir. -->
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="TaskPaneApp">
+  <Id>f3033502-7dce-4db6-9ea4-c08dd79222eb</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Yusuf Durak</ProviderName>
+  <DefaultLocale>tr-TR</DefaultLocale>
+  <DisplayName DefaultValue="Sırdaş">
+    <Override Locale="en-US" Value="Sırdaş"/>
+  </DisplayName>
+  <Description DefaultValue="Seçtiğin sütun ve hücreleri yapay zekâya göndermeden maskeler, maskeli kopyayı biçimiyle açar, yanıtı geri çevirir. Veri bilgisayarından çıkmaz.">
+    <Override Locale="en-US" Value="Masks the columns and cells you pick before you send them to an AI, opens a masked copy with its formatting and unmasks the answer. Data stays on your computer."/>
+  </Description>
+  <IconUrl DefaultValue="https://sirdas.ysfdurak.com/eklenti/ikon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://sirdas.ysfdurak.com/eklenti/ikon-64.png"/>
+  <SupportUrl DefaultValue="https://sirdas.ysfdurak.com/"/>
+  <AppDomains>
+    <AppDomain>https://sirdas.ysfdurak.com</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Workbook"/>
+  </Hosts>
+  <Requirements>
+    <Sets DefaultMinVersion="1.1">
+      <Set Name="ExcelApi" MinVersion="1.8"/>
+    </Sets>
+  </Requirements>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://sirdas.ysfdurak.com/eklenti/gorev.html"/>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Workbook">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title"/>
+            <Description resid="GetStarted.Description"/>
+            <LearnMoreUrl resid="GetStarted.LearnMoreUrl"/>
+          </GetStarted>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="Sirdas.Group">
+                <Label resid="Group.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16"/>
+                  <bt:Image size="32" resid="Icon.32"/>
+                  <bt:Image size="80" resid="Icon.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="Sirdas.Open">
+                  <Label resid="Button.Label"/>
+                  <Supertip>
+                    <Title resid="Button.Label"/>
+                    <Description resid="Button.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>SirdasPane</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="https://sirdas.ysfdurak.com/eklenti/ikon-16.png"/>
+        <bt:Image id="Icon.32" DefaultValue="https://sirdas.ysfdurak.com/eklenti/ikon-32.png"/>
+        <bt:Image id="Icon.80" DefaultValue="https://sirdas.ysfdurak.com/eklenti/ikon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://sirdas.ysfdurak.com/"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://sirdas.ysfdurak.com/eklenti/gorev.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GetStarted.Title" DefaultValue="Sırdaş hazır">
+          <bt:Override Locale="en-US" Value="Sırdaş is ready"/>
+        </bt:String>
+        <bt:String id="Group.Label" DefaultValue="Sırdaş">
+          <bt:Override Locale="en-US" Value="Sırdaş"/>
+        </bt:String>
+        <bt:String id="Button.Label" DefaultValue="Maskele">
+          <bt:Override Locale="en-US" Value="Mask"/>
+        </bt:String>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="GetStarted.Description" DefaultValue="Giriş sekmesindeki Maskele düğmesiyle Sırdaş bölmesini aç.">
+          <bt:Override Locale="en-US" Value="Open the Sırdaş pane with the Mask button on the Home tab."/>
+        </bt:String>
+        <bt:String id="Button.Tooltip" DefaultValue="Yapay zekâya göndermeden önce seçtiğin sütun ve hücreleri maskele, yanıtı geri aç.">
+          <bt:Override Locale="en-US" Value="Mask the columns and cells you pick before sending to an AI, and unmask the answer."/>
+        </bt:String>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

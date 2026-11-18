@@ -5,7 +5,7 @@ Sırdaş'ın yerel MCP sunucusu, yapay zekâ asistanının (Claude Desktop, Clau
 Web sürümüyle aynı çekirdeği (`src/core.js`), aynı şablon dosyalarını ve aynı anahtar biçimini kullanır.
 
 ## Kurulum
-Node.js 20 ya da üstü gerekir.
+Node.js 20 ya da üstü gerekir. `npm install`, ExcelJS, JSZip ve pdf.js'i de kurar.
 
 ```bash
 git clone https://github.com/ysfdurak/sirdas.git
@@ -39,10 +39,10 @@ claude mcp add -e SIRDAS_PAROLA=... sirdas -- node /yol/sirdas/mcp/sunucu.mjs /y
 ## Araçlar
 | Araç | Ne yapar | Asistana ne döner |
 |---|---|---|
-| `basliklari_goster` | Sütun başlıklarını ve türlerini (metin, sayı, tarih) listeler. | Başlıklar, satır sayısı. Hücre değeri ya da sayfa adı dönmez. |
-| `maskele_dosya` | Şablona ve/veya `sutunlar` kurallarına göre maskeler, `<ad>.maskeli.xlsx` dosyasını yazar. | Maskeli önizleme (sayfa başına 50 satır, en çok 500) ve özet. |
+| `basliklari_goster` | Excel/CSV'de sütun başlıklarını ve türlerini (metin, sayı, tarih), JSON/XML'de alan yollarını listeler. | Başlıklar ya da alan yolları, satır ve adet sayıları. Hücre değeri, örnek değer ya da sayfa adı dönmez. |
+| `maskele_dosya` | Excel'i biçimiyle (şablon ya da `sutunlar`), Word ve PowerPoint'i biçimiyle (`terimler`, bilinen değerler, kişisel veri), JSON/XML'i alan yoluyla (`alanlar`), PDF'i metin olarak maskeler; `<ad>.maskeli.<uzantı>` yazar (PDF için `.txt`). | Maskeli önizleme (sayfa başına 50 satır, en çok 500), özet ve neyin temizlendiği. |
 | `yaniti_kaydet` | Asistanın etiketli yanıtını gerçek değerlerle dosyaya yazar. | Yalnızca dosya yolu ve kaç değerin çevrildiği. |
-| `geri_ac_dosya` | Asistanın ürettiği Excel, CSV ya da metin dosyasını gerçek değerlerle `<ad>.acilmis` olarak yazar. | Yalnızca yol ve sayılar. |
+| `geri_ac_dosya` | Asistanın ürettiği Excel, Word, PowerPoint, JSON, XML, CSV ya da metin dosyasını biçimiyle, gerçek değerlerle `<ad>.acilmis` olarak yazar. | Yalnızca yol ve sayılar. |
 | `sablonlari_listele` | Kayıtlı şablonları listeler. | Şablon adları, başlıklar ve işlemler. |
 | `anahtar_ozeti` | Anahtarda hangi türden kaç etiket olduğunu verir. | Sayılar. Gerçek değer dönmez. |
 

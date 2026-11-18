@@ -4,7 +4,7 @@
  */
 (() => {
   'use strict';
-  const S = window.Sirdas;
+  const S = window.Sirdas, O = window.SirdasOfis;
   const ENV = window.SIRDAS_ENV || {};
   const $ = id => document.getElementById(id);
   const store = {
@@ -56,11 +56,12 @@
     propagate: true, auto: false, cats: S.DEFAULT_CATS.slice(), hideSheetNames: true, manual: [], ignored: [],
     textAuto: true,
     key: S.newKey(), tres: null, xres: null, sample: true,
-    backOff: new Set(), backNum: true, backDate: true, numState: {}, lastReply: ''
+    backOff: new Set(), backNum: true, backDate: true, numState: {}, lastReply: '',
+    orig: null, doc: null, struct: null, srules: {}, sres: null
   };
   const sheet = () => state.book && state.book.sheets[state.idx];
   const scfg = () => state.sheetCfg[state.idx];
-  const cur = () => state.view === 'table' ? state.tres : state.xres;
+  const cur = () => state.view === 'table' ? state.tres : state.view === 'struct' ? state.sres : state.xres;
   const coreCfg = extra => Object.assign({
     sheets: state.sheetCfg.map(sc => ({ hdr: sc.hdr, include: sc.include, cols: sc.cols, cells: [...sc.cells], holes: [...sc.holes] })),
     propagate: state.propagate, auto: state.auto, cats: state.cats, manual: state.manual, hideSheetNames: state.hideSheetNames, lang: LANG
@@ -111,6 +112,18 @@
   }
   const loadScript = src => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('load')); document.head.append(s); });
   const needXlsx = async () => { if (!window.XLSX) await loadScript(ENV.xlsxUrl || '/lib/xlsx.full.min.js'); };
+  /** Biçimli Excel, Word ve PowerPoint için ExcelJS ve JSZip; PDF için pdf.js. İlk kullanımda yüklenir. */
+  async function needOfis() {
+    if (!window.JSZip) await loadScript(ENV.jszipUrl || '/lib/jszip.min.js');
+    if (!window.ExcelJS) await loadScript(ENV.exceljsUrl || '/lib/exceljs.min.js');
+    O.init({ ExcelJS: window.ExcelJS, JSZip: window.JSZip, pdfjsLib: window.pdfjsLib });
+  }
+  async function needPdf() {
+    if (!window.pdfjsWorker) await loadScript(ENV.pdfWorkerUrl || '/lib/pdf.worker.min.js');
+    if (!window.pdfjsLib) await loadScript(ENV.pdfUrl || '/lib/pdf.min.js');
+    O.init({ pdfjsLib: window.pdfjsLib });
+  }
+  const extOf = n => (String(n).toLowerCase().match(/\.([a-z0-9]+)$/) || [, ''])[1];
   async function copyText(text, btn, selectEl) {
     const old = btn.textContent;
     try { await navigator.clipboard.writeText(text); btn.textContent = t('copied'); }
@@ -130,6 +143,9 @@
       finally { clearTimeout(busyTimer); showBusy(false); }
       if (my !== seq) return;
       state.tres = res;
+    } else if (state.view === 'struct') {
+      state.sres = null;
+      if (state.struct) { try { state.sres = S.maskStruct(state.struct.text, state.struct.kind, state.key, { rules: state.srules, propagate: state.propagate, auto: state.auto, cats: state.cats, manual: state.manual, lang: LANG }); } catch { state.sres = null; } }
     } else {
       state.xres = S.maskText($('source').value, state.key, { auto: state.textAuto, cats: state.cats, manual: state.manual, ignored: state.ignored });
     }
@@ -143,10 +159,12 @@
   }
   function renderAll() {
     if (state.view === 'table') { renderSheets(); renderGrid(); renderColPanel(); }
+    else if (state.view === 'struct') renderStruct();
     else renderText();
+    renderDocBanner();
     renderStats(); renderSuggest(); renderCheck(); renderLedger(); renderBack();
     $('sampleTag').hidden = !state.sample;
-    $('catChips').hidden = !(state.view === 'table' ? state.auto : state.textAuto);
+    $('catChips').hidden = !(state.view === 'text' ? state.textAuto : state.auto);
   }
   const isWhole = v => !!(v && v.p && v.p.length === 1 && typeof v.p[0] !== 'string');
   const disp = v => v instanceof Date ? S.fmtLocal(v, LANG) : v == null ? '' : String(v);
@@ -169,6 +187,7 @@
       const sc = state.sheetCfg[i], btn = document.createElement('button');
       btn.type = 'button'; btn.setAttribute('role', 'tab'); btn.setAttribute('aria-selected', i === state.idx);
       btn.className = sc.include ? '' : 'out'; btn.append(sh.name);
+      if (sh.hidden) { const h = document.createElement('span'); h.className = 'hid'; h.textContent = t('hiddenSheet'); btn.append(h); }
       const n = Object.keys(sc.cols).length + sc.cells.size;
       if (n) { const c = document.createElement('span'); c.className = 'n'; c.textContent = n; btn.append(c); }
       btn.onclick = () => { state.idx = i; $('hdrChk').checked = state.sheetCfg[i].hdr; $('includeChk').checked = state.sheetCfg[i].include; renderAll(); };
@@ -335,12 +354,13 @@
   }
   function hiddenCount() {
     const r = cur(); if (!r) return 0;
-    if (state.view === 'table') return r.stats.hidden + r.stats.spread + r.stats.auto + r.stats.scaled + r.stats.bucketed + r.stats.dated + r.stats.grouped;
+    if (state.view !== 'text') return r.stats.hidden + r.stats.spread + r.stats.auto + r.stats.scaled + r.stats.bucketed + r.stats.dated + r.stats.grouped;
     return r.parts.filter(p => typeof p !== 'string').length;
   }
   function renderStats() {
     const st = $('stats');
     if (state.view === 'table') st.textContent = state.book && state.tres ? t('statsTable', { n: nf(hiddenCount()) }) : '';
+    else if (state.view === 'struct') st.textContent = state.sres ? t('statsTable', { n: nf(hiddenCount()) }) : '';
     else st.textContent = $('source').value ? t('statsText', { n: nf(hiddenCount()) }) + (state.xres.suggestions.length ? t('statsSug', { n: state.xres.suggestions.length }) : '') : '';
   }
   function renderSuggest() {
@@ -377,11 +397,15 @@
   }
   function renderCheck() {
     const facts = $('facts'), body = $('checkBody'); facts.textContent = ''; body.textContent = '';
-    const r = cur(), copyBtn = $('copyOut'), xl = $('saveXlsx');
+    const r = cur(), copyBtn = $('copyOut'), xl = $('saveXlsx'), sd = $('saveDoc');
     xl.hidden = state.view !== 'table' || !canSave();
+    $('keepFmtWrap').hidden = xl.hidden || !(state.orig && /^xlsx|xlsm$/.test(state.orig.ext));
+    const docKind = state.view === 'text' && state.doc ? state.doc.kind : state.view === 'struct' && state.struct ? state.struct.kind : null;
+    sd.hidden = !docKind || !canSave();
+    if (docKind) sd.textContent = t({ docx: 'saveDocx', pptx: 'savePptx', json: 'saveJson', xml: 'saveXml' }[docKind]);
     copyBtn.textContent = state.view === 'table' ? t('copyTable') : t('copyText');
-    const none = !r || (state.view === 'table' ? !state.book : !$('source').value);
-    copyBtn.disabled = none; xl.disabled = none;
+    const none = !r || (state.view === 'table' ? !state.book : state.view === 'struct' ? !state.struct : !$('source').value);
+    copyBtn.disabled = none; xl.disabled = none; sd.disabled = none;
     if (none) { body.append(notice('info', t('ck_nothing'))); return; }
     const hidden = hiddenCount();
     if (state.view === 'table') {
@@ -406,7 +430,15 @@
       state.book.sheets.forEach((sh, i) => { const sc = state.sheetCfg[i]; for (const c in sc.cols) if (sc.cols[c].action === 'tag' && colProfile(sh, sc, +c).num >= 0.7) numTag.push(headerOf(sh, sc, +c)); });
       if (numTag.length) body.append(notice('info', t('ck_numtag', { h: numTag.join(', ') })));
       if (s.headersOpen.length) body.append(notice('info', t('ck_heads', { h: [...new Set(s.headersOpen)].slice(0, 12).join(', ') })));
+      const hid = state.book.sheets.filter((sh, i) => sh.hidden && !state.sheetCfg[i].include).map(sh => sh.name);
+      if (hid.length) body.append(notice('info', t('ck_hiddenSheets', { s: hid.join(', ') })));
       if (!L.total) body.prepend(notice('ok', t('ck_ok')));
+    } else if (state.view === 'struct') {
+      const s = r.stats, nums = s.scaled + s.bucketed;
+      facts.append(fact(t('f_hidden'), nf(hidden), t('f_hiddenD', { a: nf(s.hidden), b: nf(s.spread), c: s.auto ? t('f_auto', { n: nf(s.auto) }) : '' })));
+      facts.append(fact(t('f_numdate'), t('f_numdateV', { n: nf(nums), d: nf(s.dated) }), nums + s.dated ? t('f_numdateD', { s: nf(s.scaled), b: nf(s.bucketed), g: nf(s.grouped) }) : t('f_numdateD0')));
+      facts.append(fact(t('f_fieldsDrop'), nf(s.dropped.length), s.dropped.length ? s.dropped.join(', ') : t('f_dropD0')));
+      body.append(hidden || s.dropped.length ? notice('ok', t('ck_ok')) : notice('', t('ck_nothing')));
     } else {
       const uniq = new Set(r.parts.filter(p => typeof p !== 'string').map(p => p.t)).size;
       facts.append(fact(t('f_textHidden'), nf(hidden), t('f_textHiddenD', { n: nf(uniq) })));
@@ -491,10 +523,10 @@
   }
 
   /* ---------------- Dosyalar ---------------- */
-  function setBook(sheets, statusText) {
-    state.sample = false; $('replyTag').hidden = true;
+  function setBook(sheets, statusText, orig) {
+    state.sample = false; $('replyTag').hidden = true; state.orig = orig || null;
     state.book = { sheets }; state.idx = 0;
-    state.sheetCfg = sheets.map(() => newSheetCfg());
+    state.sheetCfg = sheets.map(sh => Object.assign(newSheetCfg(), { include: !sh.hidden }));
     if (state.auto) sheets.forEach((sh, i) => autoCols(sh, state.sheetCfg[i]));
     $('fileStatus').textContent = statusText || '';
     if (state.view !== 'table') setView('table', true);
@@ -507,33 +539,101 @@
     for (const c in s) if (!sc.cols[c]) sc.cols[c] = { action: 'tag', label: s[c] };
   }
   async function readFile(file) {
-    const name = file.name.toLowerCase(), st = $('fileStatus');
-    st.textContent = t('reading', { f: file.name });
+    const name = file.name, ext = extOf(name), st = $('fileStatus');
+    st.textContent = t('reading', { f: name });
     try {
-      if (/\.(xlsx|xls|xlsm|ods)$/.test(name)) {
+      if (['xlsx', 'xlsm', 'xls', 'ods'].includes(ext)) {
         await needXlsx();
-        const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
-        const list = wb.SheetNames.map(n => {
-          const ws = wb.Sheets[n];
-          const shown = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '', blankrows: false, dateNF: LANG === 'en' ? 'yyyy-mm-dd' : 'dd\\.mm\\.yyyy' });
-          const raw = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '', blankrows: false });
-          return S.makeSheet(n, shown, raw);
-        }).filter(s => s.rows.length);
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const wb = XLSX.read(bytes, { type: 'array', cellDates: true });
+        const list = O.bookFromSheetJS(XLSX, wb, LANG).sheets;
         if (!list.length) throw new Error('empty');
-        setBook(list, t('readOk', { f: file.name, s: list.length, r: nf(list.reduce((a, s) => a + s.rows.length, 0)) }));
-      } else if (/\.(csv|tsv)$/.test(name)) {
+        closeDoc(true);
+        setBook(list, t('readOk', { f: name, s: list.length, r: nf(list.reduce((a, s) => a + s.rows.length, 0)) }), { bytes, ext });
+      } else if (['csv', 'tsv'].includes(ext)) {
         const rows = S.parseTable(await file.text()); if (!rows) throw new Error('empty');
-        setBook([S.makeSheet(file.name, rows)], t('readOk', { f: file.name, s: 1, r: nf(rows.length) }));
+        closeDoc(true);
+        setBook([S.makeSheet(name, rows)], t('readOk', { f: name, s: 1, r: nf(rows.length) }));
+      } else if (['docx', 'pptx'].includes(ext)) {
+        st.textContent = t('loadingLib'); await needOfis();
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const info = await O.docInfo(bytes);
+        state.sample = false; state.doc = { bytes, kind: info.kind, name };
+        $('source').value = info.text; $('source').readOnly = true; st.textContent = '';
+        setView('text', true); refresh();
+      } else if (ext === 'pdf') {
+        st.textContent = t('loadingLib'); await needPdf();
+        const r = await O.pdfText(new Uint8Array(await file.arrayBuffer()));
+        closeDoc(true); state.sample = false;
+        $('source').value = r.text; st.textContent = r.empty ? t('pdfEmpty', { f: name }) : t('pdfLoaded', { f: name, n: r.pages });
+        setView('text', true); refresh();
+      } else if (['json', 'xml', 'geojson'].includes(ext)) {
+        setStruct(await file.text(), name);
       } else {
-        let text;
-        if (name.endsWith('.docx')) {
-          if (!window.mammoth) await loadScript(ENV.mammothUrl || '/lib/mammoth.browser.min.js');
-          text = (await window.mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value;
-        } else text = await file.text();
-        state.sample = false; $('source').value = text; st.textContent = '';
-        setView('text');
+        const text = await file.text();
+        closeDoc(true); state.sample = false; $('source').value = text; st.textContent = '';
+        setView('text', true); refresh();
       }
-    } catch { st.textContent = t('readFail', { f: file.name }); }
+    } catch (e) { st.textContent = /missing_lib|load/.test(e && e.message) ? t('libFail') : t('readFail', { f: name }); }
+  }
+  function closeDoc(silent) {
+    if (!state.doc) return;
+    state.doc = null; $('source').readOnly = false;
+    if (!silent) { $('source').value = ''; refresh(); }
+  }
+  function renderDocBanner() {
+    const b = $('docBanner'), d = state.doc;
+    b.hidden = !(d && state.view === 'text');
+    if (!b.hidden) $('docBannerText').textContent = t('docLoaded', { k: t('kind_' + d.kind), f: d.name });
+  }
+
+  /* ---------------- JSON ve XML alanları ---------------- */
+  function setStruct(text, name) {
+    const st = $('fileStatus'); const tt = text.trim();
+    const kind = /^[[{]/.test(tt) ? 'json' : /^</.test(tt) ? 'xml' : null;
+    let fields = null;
+    try { if (kind) fields = S.structFields(tt, kind); } catch { fields = null; }
+    if (!fields || !fields.length) { st.textContent = t('structBad'); return false; }
+    state.sample = false; state.struct = { text: tt, kind, name: name || (kind === 'json' ? 'veri.json' : 'veri.xml'), fields }; state.srules = {};
+    st.textContent = t('structLoaded', { f: state.struct.name, n: fields.length });
+    setView('struct', true); refresh(); return true;
+  }
+  const TOK_RE = /\[[A-Z][A-Z0-9_]*_\d+(?:_(?:ILK|SON))?\]/g;
+  function renderTokText(el, text) {
+    el.textContent = ''; let last = 0;
+    for (const m of text.matchAll(TOK_RE)) { if (m.index > last) el.append(text.slice(last, m.index)); const sp = document.createElement('span'); sp.className = 'tok'; sp.textContent = m[0]; el.append(sp); last = m.index + m[0].length; }
+    if (last < text.length) el.append(text.slice(last));
+  }
+  function renderStruct() {
+    const list = $('fieldList'), out = $('structOut'); list.textContent = '';
+    out.dataset.empty = t('structOutEmpty'); $('structKind').hidden = !state.struct;
+    if (!state.struct) {
+      const e = document.createElement('div'); e.className = 'empty-grid';
+      const h = document.createElement('strong'); h.textContent = t('structEmptyH'); const p = document.createElement('span'); p.textContent = t('structEmptyP');
+      e.append(h, p); list.append(e); out.textContent = ''; return;
+    }
+    $('structKind').textContent = state.struct.kind.toUpperCase();
+    for (const f of state.struct.fields) {
+      const rule = state.srules[f.path];
+      const row = document.createElement('div'); row.className = 'frow' + (rule ? ' on' : '');
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!rule; cb.id = 'fld-' + S.slug(f.path) + '-' + state.struct.fields.indexOf(f); cb.setAttribute('aria-label', t('fieldAria', { p: f.path }));
+      cb.onchange = () => { if (cb.checked) state.srules[f.path] = { action: f.type === 'date' ? 'date' : f.type === 'number' ? 'scale' : 'tag', label: '' }; else delete state.srules[f.path]; refresh(); };
+      const fp = document.createElement('label'); fp.className = 'fp'; fp.htmlFor = cb.id; fp.textContent = f.path;
+      const fm = document.createElement('span'); fm.className = 'fm'; fm.textContent = `${t('fieldTimes', { n: nf(f.count) })} · ${t('type_' + f.type)}`;
+      const fs = document.createElement('span'); fs.className = 'fs'; fs.textContent = f.samples.join(' · ');
+      row.append(cb, fp, fm, fs);
+      if (rule) {
+        const fa = document.createElement('div'); fa.className = 'fa';
+        const sel = document.createElement('select'); sel.className = 's'; sel.id = cb.id + '-act'; sel.setAttribute('aria-label', t('colActAria', { h: f.path }));
+        for (const a of ['tag', 'drop', 'scale', 'bucket', 'date']) { const o = document.createElement('option'); o.value = a; o.textContent = t('act_' + a); sel.append(o); }
+        sel.value = rule.action; sel.onchange = () => { rule.action = sel.value; refresh(); };
+        const inp = document.createElement('input'); inp.className = 'i mono'; inp.id = cb.id + '-lab'; inp.maxLength = 24; inp.value = rule.label || S.slug(f.name) || 'ALAN';
+        inp.setAttribute('aria-label', t('colLabelAria', { h: f.path })); inp.onchange = () => { rule.label = S.slug(inp.value); refresh(); };
+        fa.append(sel, inp); row.append(fa);
+      }
+      list.append(row);
+    }
+    renderTokText(out, state.sres ? state.sres.masked : state.struct.text);
   }
 
   async function fullResult() { return engine.mask(state.book, state.key, coreCfg({ keepRows: 0 })); }
@@ -543,11 +643,27 @@
       const res = await fullResult(); commitCurrent(res);
       const so = res.sheets.find(s => s.index === state.idx);
       await copyText(S.toTSV(so, LANG), btn, $('gridWrap'));
-    } else { commitCurrent(); await copyText(state.xres.masked, btn, $('preview')); }
+    } else if (state.view === 'struct') { commitCurrent(); await copyText(state.sres.masked, btn, $('structOut')); }
+    else { commitCurrent(); await copyText(state.xres.masked, btn, $('preview')); }
     refresh();
+  }
+  function reportText(rep) {
+    const items = [];
+    for (const k of ['formulas', 'notes', 'validations', 'conditional', 'tables', 'images', 'definedNames', 'sheetsRemoved', 'headerFooter', 'embedded']) if (rep[k]) items.push(t('rep_' + k, { n: nf(rep[k]) }));
+    for (const k of ['properties', 'authors', 'thumbnail', 'links']) if (rep[k]) items.push(t('rep_' + k));
+    return (items.length ? t('fmtReport', { l: items.join(', ') }) : t('fmtNone')) + (rep.media ? t('docMediaNote', { n: nf(rep.media) }) : '');
   }
   async function doSaveXlsx() {
     const st = $('sendStatus');
+    if (state.orig && ['xlsx', 'xlsm'].includes(state.orig.ext) && $('keepFmt').checked) {
+      try {
+        st.textContent = t('loadingLib'); await needOfis();
+        const res = await fullResult();
+        const out = await O.excelMaskPreserve(state.orig.bytes, state.book, res, { hideSheetNames: state.hideSheetNames });
+        if (await saveWithStatus('sirdas-maskeli.xlsx', out.bytes, st)) { commitCurrent(res); st.textContent = t('saved') + ' ' + reportText(out.report); refresh(); }
+      } catch { st.textContent = t('libFail'); }
+      return;
+    }
     try {
       await needXlsx();
       const res = await fullResult();
@@ -560,8 +676,49 @@
       }
       if (!wb.SheetNames.length) return;
       const ok = await saveWithStatus('sirdas-maskeli.xlsx', new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' })), st);
-      if (ok) { commitCurrent(res); refresh(); }
+      if (ok) { commitCurrent(res); if (state.orig && !['xlsx', 'xlsm'].includes(state.orig.ext)) st.textContent += ' ' + t('fmtFallback'); refresh(); }
     } catch { st.textContent = t('xlsxFail'); }
+  }
+  async function doSaveDoc() {
+    const st = $('sendStatus'); st.textContent = '';
+    try {
+      if (state.view === 'struct') {
+        const r = state.sres; if (!r) return;
+        if (await saveWithStatus('sirdas-maskeli.' + state.struct.kind, r.masked, st)) { commitCurrent(r); refresh(); }
+        return;
+      }
+      const d = state.doc; if (!d) return;
+      st.textContent = t('busy'); await needOfis();
+      const out = await O.docMask(d.bytes, state.key, { auto: state.textAuto, cats: state.cats, manual: state.manual, lang: LANG });
+      if (await saveWithStatus('sirdas-maskeli.' + d.kind, out.bytes, st)) { S.commit(state.key, out.result); st.textContent = t('saved') + ' ' + reportText(out.report); refresh(); }
+    } catch { st.textContent = t('libFail'); }
+  }
+  async function restoreFile(f) {
+    const ext = extOf(f.name), st = $('replyStatus');
+    const opts = { off: [...state.backOff], numbers: state.backNum, dates: state.backDate, lang: LANG };
+    try {
+      if (['xlsx', 'xlsm'].includes(ext)) {
+        st.textContent = t('loadingLib'); await needOfis();
+        const r = await O.excelRestore(new Uint8Array(await f.arrayBuffer()), eff(), opts);
+        if (!r.done) { st.textContent = t('replyNone'); return; }
+        const pre = t('replyDone', { n: nf(r.done) });
+        await saveWithStatus('sirdas-acilmis.' + ext, r.bytes, st);
+        st.textContent = pre + st.textContent + (r.unknown.length ? ' ' + t('repUnknown') + ' ' + r.unknown.map(x => `[${x}]`).join(', ') : '');
+      } else if (['docx', 'pptx'].includes(ext)) {
+        st.textContent = t('loadingLib'); await needOfis();
+        const r = await O.docRestore(new Uint8Array(await f.arrayBuffer()), eff(), Object.assign({}, opts, { numbers: false }));
+        if (!r.done) { st.textContent = t('replyNone'); return; }
+        const pre = t('replyDocDone', { n: nf(r.done) });
+        await saveWithStatus('sirdas-acilmis.' + ext, r.bytes, st);
+        st.textContent = pre + st.textContent + (r.unknown.length ? ' ' + t('repUnknown') + ' ' + r.unknown.map(x => `[${x}]`).join(', ') : '');
+      } else if (['json', 'xml'].includes(ext)) {
+        const r = S.restoreStruct(await f.text(), ext, eff(), opts);
+        if (!r.done) { st.textContent = t('replyNone'); return; }
+        const pre = t('replyDocDone', { n: nf(r.done) });
+        await saveWithStatus('sirdas-acilmis.' + ext, r.text, st); st.textContent = pre + st.textContent;
+      } else if (['xls', 'ods'].includes(ext)) return restoreXlsx(f);
+      else { $('reply').value = await f.text(); $('replyTag').hidden = true; renderRestore(); }
+    } catch { st.textContent = t('replyFail'); }
   }
   async function restoreXlsx(f) {
     const st = $('replyStatus');
@@ -633,15 +790,16 @@
   function setView(v, silent) {
     if (v === state.view) return;
     commitCurrent(); state.view = v;
-    const tb = v === 'table';
-    $('tabTable').setAttribute('aria-selected', tb); $('tabText').setAttribute('aria-selected', !tb);
-    $('viewTable').hidden = !tb; $('viewText').hidden = tb; $('propWrap').hidden = !tb; $('sheetNameWrap').hidden = !tb;
+    for (const [tab, view, name] of [['tabTable', 'viewTable', 'table'], ['tabText', 'viewText', 'text'], ['tabStruct', 'viewStruct', 'struct']]) {
+      $(tab).setAttribute('aria-selected', v === name); $(view).hidden = v !== name;
+    }
+    $('propWrap').hidden = v === 'text'; $('sheetNameWrap').hidden = v !== 'table';
     syncOpts();
     if (!silent) refresh();
   }
   function syncOpts() {
     $('propChk').checked = state.propagate; $('sheetNameChk').checked = state.hideSheetNames;
-    $('autoChk').checked = state.view === 'table' ? state.auto : state.textAuto;
+    $('autoChk').checked = state.view === 'text' ? state.textAuto : state.auto;
   }
   function renderCats() {
     const box = $('catChips'); box.textContent = '';
@@ -668,7 +826,8 @@
     ]
   };
   async function loadSample() {
-    state.sample = true; state.key = S.newKey(); state.manual = []; state.view = 'table';
+    state.sample = true; state.key = S.newKey(); state.manual = []; state.orig = null; state.doc = null; state.struct = null; state.srules = {};
+    if (state.view !== 'table') setView('table', true);
     state.book = { sheets: [S.makeSheet(LANG === 'en' ? 'Projects' : 'Operasyonlar', SAMPLE[LANG])] }; state.idx = 0;
     const sc = newSheetCfg();
     sc.cols = { 0: { action: 'tag', label: '' }, 2: { action: 'tag', label: '' }, 3: { action: 'date', label: '' }, 4: { action: 'scale', label: '' } };
@@ -694,6 +853,18 @@
     wireGrid();
     $('tabTable').onclick = () => setView('table');
     $('tabText').onclick = () => setView('text');
+    $('tabStruct').onclick = () => setView('struct');
+    $('docClose').onclick = () => closeDoc();
+    $('saveDoc').onclick = doSaveDoc;
+    $('structFile').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (f) setStruct(await f.text(), f.name); };
+    $('structPasteToggle').onclick = () => { const b = $('structPasteBox'); b.hidden = !b.hidden; if (!b.hidden) $('structPasteArea').focus(); };
+    $('structPasteCancel').onclick = () => { $('structPasteBox').hidden = true; $('structPasteArea').value = ''; };
+    $('structPasteApply').onclick = () => { if (setStruct($('structPasteArea').value)) { $('structPasteBox').hidden = true; $('structPasteArea').value = ''; } };
+    $('structClear').onclick = () => { state.srules = {}; refresh(); };
+    const sdz = $('viewStruct');
+    sdz.addEventListener('dragover', e => { e.preventDefault(); sdz.classList.add('drag'); });
+    sdz.addEventListener('dragleave', () => sdz.classList.remove('drag'));
+    sdz.addEventListener('drop', e => { e.preventDefault(); sdz.classList.remove('drag'); if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); });
     $('file').onchange = e => { if (e.target.files[0]) readFile(e.target.files[0]); e.target.value = ''; };
     for (const dz of [$('viewTable'), $('dropText')]) {
       dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
@@ -718,7 +889,7 @@
     $('propChk').onchange = e => { state.propagate = e.target.checked; refresh(); };
     $('sheetNameChk').onchange = e => { state.hideSheetNames = e.target.checked; refresh(); };
     $('autoChk').onchange = e => {
-      if (state.view === 'table') { state.auto = e.target.checked; if (state.auto && state.book) state.book.sheets.forEach((sh, i) => autoCols(sh, state.sheetCfg[i])); }
+      if (state.view !== 'text') { state.auto = e.target.checked; if (state.auto && state.book && state.view === 'table') state.book.sheets.forEach((sh, i) => autoCols(sh, state.sheetCfg[i])); }
       else state.textAuto = e.target.checked;
       refresh();
     };
@@ -798,7 +969,8 @@
     resetBtn.onclick = () => {
       if (!armed) { resetBtn.textContent = t('resetConfirm'); armed = setTimeout(() => { armed = null; resetBtn.textContent = t('reset'); }, 4000); return; }
       clearTimeout(armed); armed = null; resetBtn.textContent = t('reset');
-      Object.assign(state, { key: S.newKey(), manual: [], ignored: [], backOff: new Set(), book: null, sheetCfg: [], sample: false, numState: {} });
+      Object.assign(state, { key: S.newKey(), manual: [], ignored: [], backOff: new Set(), book: null, sheetCfg: [], sample: false, numState: {}, orig: null, doc: null, struct: null, srules: {}, sres: null });
+      $('source').readOnly = false;
       $('source').value = ''; $('reply').value = ''; $('sheetTabs').hidden = true; $('fileStatus').textContent = '';
       refresh();
     };
@@ -807,7 +979,7 @@
     $('reply').addEventListener('input', () => { $('replyTag').hidden = true; clearTimeout(laterT); laterT = setTimeout(renderRestore, 120); });
     $('clearReply').onclick = () => { $('replyTag').hidden = true; $('reply').value = ''; renderRestore(); };
     $('copyRestored').onclick = e => copyText(restoredText(), e.currentTarget, $('restored'));
-    $('replyXlsx').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) restoreXlsx(f); };
+    $('replyXlsx').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) restoreFile(f); };
 
     const demo = $('demoBar');
     demo.onclick = () => { const on = demo.getAttribute('aria-pressed') !== 'true'; demo.setAttribute('aria-pressed', on); demo.textContent = on ? t('demoValue') : t('demoToken'); };

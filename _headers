@@ -5,3 +5,6 @@
   Referrer-Policy: no-referrer
   X-Frame-Options: DENY
   Permissions-Policy: geolocation=(), microphone=(), camera=(), clipboard-write=(self)
+/eklenti/*
+  ! X-Frame-Options
+  Cache-Control: no-cache

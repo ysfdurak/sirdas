@@ -7,6 +7,7 @@
  * Çalıştırma: node sunucu.mjs <izinli klasör> [<izinli klasör> ...]
  * Ortam: SIRDAS_PAROLA (anahtarı şifreler, önerilir), SIRDAS_ANAHTAR, SIRDAS_DIZIN, SIRDAS_DIL=tr|en
  */
+import './konsol.mjs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -24,19 +25,21 @@ const ISLEM = z.enum(['tag', 'drop', 'scale', 'bucket', 'date']).describe('tag: 
 
 server.registerTool('basliklari_goster', {
   title: 'Sütun başlıklarını göster',
-  description: 'Bir Excel/CSV dosyasının sayfa sırasını, satır sayısını, sütun başlıklarını ve sütun türünü (metin/sayı/tarih) verir. Hücre değeri ve sayfa adı döndürmez. Hangi sütunların gizleneceğini önermek için kullan.',
+  description: 'Excel/CSV dosyasının sayfa sırasını, satır sayısını, sütun başlıklarını ve sütun türünü (metin/sayı/tarih) verir; JSON/XML dosyasında alan yollarını, adetlerini ve türlerini verir. Hücre değeri, örnek değer ve sayfa adı döndürmez. Neyin gizleneceğini önermek için kullan.',
   inputSchema: { dosya: z.string().describe('Dosyanın tam yolu (izinli klasörlerin içinde)') },
   annotations: { readOnlyHint: true }
-}, run(a => ({ sayfalar: I.basliklar(cfg, a.dosya) })));
+}, run(a => I.basliklar(cfg, a.dosya)));
 
 server.registerTool('maskele_dosya', {
   title: 'Dosyayı maskele',
-  description: 'Dosyayı şablona ya da verilen sütun kurallarına göre maskeler, maskeli kopyayı diske yazar (<ad>.maskeli.xlsx) ve sana yalnızca maskeli önizlemeyi döndürür. Anahtar kullanıcının bilgisayarında kalır; aynı değer her seferinde aynı etiketi alır. Metin dosyalarında kişisel veriler otomatik bulunur.',
+  description: 'Dosyayı maskeler, maskeli kopyayı diske yazar ve sana yalnızca maskeli önizlemeyi döndürür. Excel (.xlsx biçimiyle; formül, not, gizli sayfa temizlenir), CSV, Word ve PowerPoint (biçimiyle; terimler ve kişisel veriler belgenin her yerinde gizlenir), JSON/XML (alan yoluyla), PDF (yalnızca metin, .txt çıktı) ve düz metin. Anahtar kullanıcının bilgisayarında kalır; aynı değer her dosyada aynı etiketi alır.',
   inputSchema: {
     dosya: z.string().describe('Maskelenecek dosyanın tam yolu'),
     sablon: z.string().optional().describe('Kayıtlı şablonun adı ya da .json şablon dosyasının yolu (sablonlari_listele)'),
     sutunlar: z.array(z.object({ baslik: z.string(), islem: ISLEM.default('tag'), etiket: z.string().optional() })).optional().describe('Şablona ek sütun kuralları, başlık adıyla'),
-    terimler: z.array(z.string()).optional().describe('Metin dosyalarında ayrıca gizlenecek ifadeler'),
+    alanlar: z.array(z.object({ yol: z.string().describe('basliklari_goster’in verdiği alan yolu, ör. kayitlar[].musteri.ad ya da Liste/Musteri/@vkn'), islem: ISLEM.default('tag'), etiket: z.string().optional() })).optional().describe('JSON/XML için gizlenecek alanlar'),
+    terimler: z.array(z.string()).optional().describe('Word, PowerPoint, PDF ve metinde ayrıca gizlenecek ifadeler (operasyon adı, müşteri adı…)'),
+    bicimi_koru: z.boolean().optional().describe('Excel .xlsx çıktısında biçimi koru (varsayılan açık)'),
     deger_yay: z.boolean().optional().describe('Gizlenen değerler başka hücrelerde geçerse onları da gizle (varsayılan açık)'),
     sayfa_adlarini_gizle: z.boolean().optional().describe('Varsayılan açık'),
     kisisel_veri: z.boolean().optional().describe('Kişisel verileri (ad, T.C. kimlik, IBAN, telefon…) otomatik bul'),
@@ -47,7 +50,7 @@ server.registerTool('maskele_dosya', {
 
 server.registerTool('geri_ac_dosya', {
   title: 'Dosyayı geri aç',
-  description: 'Etiketli bir dosyayı (senin ürettiğin Excel, CSV, Markdown ya da metin) gerçek değerlerle yeni bir dosyaya yazar (<ad>.acilmis). Ölçeklenmiş sayılar ve kaydırılmış tarihler, başlığı eşleşen sütunlarda geri çevrilir. İçeriği sana DÖNDÜRMEZ; yalnızca yol ve sayılar döner.',
+  description: 'Etiketli bir dosyayı (Excel, Word, PowerPoint, JSON, XML, CSV, Markdown ya da metin) biçimini koruyarak gerçek değerlerle yeni bir dosyaya yazar (<ad>.acilmis). Ölçeklenmiş sayılar ve kaydırılmış tarihler, başlığı eşleşen sütunlarda geri çevrilir. İçeriği sana DÖNDÜRMEZ; yalnızca yol ve sayılar döner.',
   inputSchema: {
     dosya: z.string(), cikti: z.string().optional(),
     sayilar: z.boolean().optional().describe('Ölçeklenmiş sayıları geri çevir (varsayılan açık)'),
@@ -77,3 +80,6 @@ server.registerTool('anahtar_ozeti', {
 }, run(() => I.anahtarOzeti(cfg)));
 
 await server.connect(new StdioServerTransport());
+// İstemci bağlantıyı kapatınca çık (pdf.js gibi kütüphaneler süreci açık tutabilir).
+process.stdin.on('end', () => process.exit(0));
+process.stdin.on('close', () => process.exit(0));

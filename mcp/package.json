@@ -1,12 +1,25 @@
 {
   "name": "sirdas-mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Sırdaş yerel MCP sunucusu: dosyayı şablona göre maskeler, yapay zekâya yalnızca maskeli halini verir, geri açmayı bilgisayarında yapar.",
   "type": "module",
-  "bin": { "sirdas-mcp": "sunucu.mjs" },
-  "scripts": { "start": "node sunucu.mjs", "test": "node --test sunucu.test.mjs" },
-  "engines": { "node": ">=20" },
-  "dependencies": { "@modelcontextprotocol/sdk": "1.32.1", "zod": "3.25.76" },
+  "bin": {
+    "sirdas-mcp": "sunucu.mjs"
+  },
+  "scripts": {
+    "start": "node sunucu.mjs",
+    "test": "node --test sunucu.test.mjs ofis.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "exceljs": "4.4.0",
+    "jszip": "3.10.1",
+    "pdfjs-dist": "3.11.174",
+    "zod": "3.25.76"
+  },
   "license": "SEE LICENSE IN ../LICENSE.md"
 }

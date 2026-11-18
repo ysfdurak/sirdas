@@ -58,6 +58,7 @@ test('katsayıyla ölçekleme oranları korur ve geri çevrilir', () => {
   const back = S.restoreText(`Toplam ${aoa[1][4]} oldu, artış %12.`, key, { numbers: true });
   const s = S.restoredToText(back.parts);
   assert.match(s, /Toplam 41[12]\.\d{3} oldu, artış %12\./);
+  assert.equal(S.roundest(411999.996, 2, 0.8).n, 412000);
   const cell = S.restoreValue(a, key, { numbers: true }, 'Maliyet (TL)');
   assert.ok(Math.abs(cell.value - 412000) <= 1);
   assert.equal(cell.value, Math.round(cell.value));
@@ -198,4 +199,51 @@ test('büyük tablo makul sürede biter', () => {
   assert.equal(r.leaks.total, 0);
   assert.ok(ms < 15000, `süre ${ms} ms`);
   console.log(`    20.000 satır: ${ms} ms`);
+});
+
+test('çok parçalı metin: bölünmüş değer tek etikete döner, ilk parçanın biçimini alır', () => {
+  const xml = '<w:p><w:r><w:t>Proje </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>Atlas</w:t></w:r><w:r><w:t xml:space="preserve"> &amp; Kuzey</w:t></w:r></w:p>';
+  const nodes = S.xmlScan(xml, { textTags: ['w:t'], paraTags: ['w:p'] });
+  assert.deepEqual(nodes.map(n => n.value), ['Proje ', 'Atlas', ' & Kuzey']);
+  const r = S.maskTexts([nodes.map(n => n.value).join('')], S.newKey(), { manual: [{ term: 'Proje Atlas', label: 'OP' }] });
+  const out = S.redistribute(nodes.map(n => n.value), r.parts[0], p => `[${p.t}]`);
+  assert.deepEqual(out, ['[OP_1]', '', ' & Kuzey']);
+  assert.equal(S.xmlApply(xml, nodes.map((n, i) => ({ start: n.start, end: n.end, text: S.encodeXml(out[i]) }))), xml.replace('Proje </w:t>', '[OP_1]</w:t>').replace('>Atlas<', '><'));
+});
+
+test('çok parçalı metin: sonraki paragrafta bulunan ad öncekinde de gizlenir', () => {
+  const r = S.maskTexts(['Demir yarın gelir.', 'Sayın Ayşe Demir aradı.'], S.newKey(), { auto: true });
+  assert.deepEqual(r.parts.map(S.partsToText), ['[AD_1_SON] yarın gelir.', 'Sayın [AD_1] aradı.']);
+});
+
+test('JSON: alan yoluyla maskeleme, yapı korunur, geri açma birebir', () => {
+  const j = JSON.stringify({ musteriler: [{ ad: 'Selin Aksoy', tutar: 412000, tarih: '2026-03-02T10:00:00Z', not: 'Selin Aksoy aradı' }, { ad: 'Kerem Tan', tutar: 268500, tarih: '2026-03-16', gizli: 'x' }] }, null, 2);
+  assert.deepEqual(S.structFields(j, 'json').map(f => f.path + ':' + f.type), ['musteriler[].ad:text', 'musteriler[].tutar:number', 'musteriler[].tarih:date', 'musteriler[].not:text', 'musteriler[].gizli:text']);
+  const key = S.newKey();
+  const m = S.maskStruct(j, 'json', key, { rules: { 'musteriler[].ad': { action: 'tag' }, 'musteriler[].tutar': { action: 'scale' }, 'musteriler[].tarih': { action: 'date' }, 'musteriler[].gizli': { action: 'drop' } } });
+  const o = JSON.parse(m.masked);
+  assert.equal(o.musteriler[0].ad, '[AD_1]'); assert.equal(o.musteriler[0].not, '[AD_1] aradı');
+  assert.ok(!('gizli' in o.musteriler[1])); assert.match(o.musteriler[0].tarih, /T10:00:00Z$/);
+  S.commit(key, m);
+  const back = JSON.parse(S.restoreStruct(m.masked, 'json', key, { numbers: true, dates: true }).text);
+  assert.deepEqual(back.musteriler.map(x => [x.ad, x.tutar, x.tarih]), [['Selin Aksoy', 412000, '2026-03-02T10:00:00Z'], ['Kerem Tan', 268500, '2026-03-16']]);
+});
+
+test('XML: metin, öznitelik ve CDATA; çıkar kuralı öğeyi siler', () => {
+  const xml = '<Liste>\n  <Musteri vkn="1234567890"><Ad>Selin Aksoy</Ad><Not><![CDATA[Selin Aksoy & ekip]]></Not><Gizli>sil</Gizli></Musteri>\n</Liste>';
+  const key = S.newKey();
+  const m = S.maskStruct(xml, 'xml', key, { rules: { 'Liste/Musteri/Ad': { action: 'tag' }, 'Liste/Musteri/@vkn': { action: 'tag' }, 'Liste/Musteri/Gizli': { action: 'drop' } } });
+  assert.equal(m.masked, '<Liste>\n  <Musteri vkn="[VKN_1]"><Ad>[AD_1]</Ad><Not><![CDATA[[AD_1] & ekip]]></Not></Musteri>\n</Liste>');
+  S.commit(key, m);
+  assert.equal(S.restoreStruct(m.masked, 'xml', key, {}).text, xml.replace('<Gizli>sil</Gizli>', ''));
+});
+
+test('ölçeklenen Excel sayısı iki ondalık fazla saklanır, geri açınca tam değer döner', () => {
+  const b = { sheets: [S.makeSheet('S', [['Tutar'], ['412000']], [['Tutar'], [412000]])] };
+  const key = S.newKey();
+  const r = S.maskBook(b, key, cfg({ 0: { action: 'scale' } })); S.commit(key, r);
+  const v = S.toAOA(r.sheets[0])[1][0];
+  assert.equal(typeof v, 'number');
+  assert.equal(S.restoreValue(v, key, { numbers: true }, 'Tutar').value, 412000);
+  assert.equal(S.restoredToText(S.restoreText(`toplam ${v}`, key, { numbers: true }).parts), 'toplam 412000');
 });

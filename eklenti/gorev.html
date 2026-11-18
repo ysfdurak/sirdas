@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://appsforoffice.microsoft.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://appsforoffice.microsoft.com; font-src 'self'; connect-src 'self' https://appsforoffice.microsoft.com; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sırdaş</title>
+<link rel="stylesheet" href="/lib/fonts/fonts.css">
+<style>
+/* Excel'in yan bölmesi dardır (300–450 px): tek sütun, kısa satırlar. Renkler sitedeki Sırdaş ile aynı. */
+:root {
+  --paper: #E9EEF0; --sheet: #FBFCFC; --ink: #14222B; --muted: #52636C; --rule: #C6D1D6;
+  --bar: #14222B; --bar-text: #F2F6F7; --accent: #0A6767; --accent-text: #FFFFFF; --tint: #E3EDEC;
+  --warn: #7A4A00; --warn-bg: #FAE9C8; --good: #1E6A3A; --good-bg: #DDF1E2;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; --mono: "JetBrains Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root { --paper: #0F171C; --sheet: #172229; --ink: #E7EEF0; --muted: #9AABB2; --rule: #2F3F48; --bar: #E7EEF0; --bar-text: #0F171C; --accent: #55C7B9; --accent-text: #08201D; --tint: #203239; --warn: #F2C574; --warn-bg: #3A2D13; --good: #8FD9A8; --good-bg: #173726; color-scheme: dark } }
+* { box-sizing: border-box }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 13px/1.5 var(--body) }
+button, input, select, textarea { font: inherit; color: inherit }
+[hidden] { display: none !important }
+main { display: grid; gap: 14px; padding: 12px }
+header { display: grid; gap: 4px }
+.brand { font: 600 12px var(--mono); letter-spacing: .06em; display: flex; justify-content: space-between }
+h1 { margin: 0; font: 700 20px/1.15 var(--display) }
+.bar { font: 600 .85em var(--mono); background: var(--bar); color: var(--bar-text); padding: 0 .25em }
+p { margin: 0 }
+.muted { color: var(--muted) }
+section { background: var(--sheet); border: 1px solid var(--rule); display: grid }
+section > h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--rule); font: 600 13px var(--body); display: flex; gap: 8px; align-items: baseline }
+section > h2 .n { font: 600 11px var(--mono); color: var(--accent) }
+.body { display: grid; gap: 8px; padding: 10px }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
+.b { border: 1px solid var(--rule); background: transparent; padding: 6px 9px; min-height: 30px; cursor: pointer; font-size: 12.5px }
+.b:hover { border-color: var(--ink) }
+.b.go { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600 }
+.b:disabled { opacity: .5; cursor: default }
+select.s, input.i, textarea { border: 1px solid var(--rule); background: var(--sheet); padding: 5px 7px; min-height: 30px; max-width: 100%; font-size: 12.5px }
+input.i.mono { font: 600 11.5px var(--mono) }
+textarea { width: 100%; min-height: 80px; font: 400 12px/1.45 var(--mono); resize: vertical }
+.check { display: flex; gap: 6px; align-items: flex-start; cursor: pointer }
+.check input { margin: 2px 0 0; accent-color: var(--accent) }
+.rule { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 7px 10px; border-bottom: 1px solid var(--rule) }
+.rule:last-child { border-bottom: 0 }
+.rule b { font-weight: 600; overflow-wrap: anywhere }
+.rule .where { grid-column: 1 / -1; font: 400 11.5px var(--mono); color: var(--muted) }
+.rule .ctl { grid-column: 1 / -1; display: flex; gap: 6px }
+.rule .ctl select { flex: 1 }
+.empty { padding: 10px; color: var(--muted) }
+.notice { padding: 8px 10px; background: var(--warn-bg); color: var(--warn); display: grid; gap: 6px }
+.notice.ok { background: var(--good-bg); color: var(--good) }
+.notice.info { background: var(--tint); color: var(--ink) }
+.notice .b { color: inherit; border-color: currentColor }
+.status { min-height: 1.3em; color: var(--muted); font-size: 12px }
+.heads { display: grid; gap: 2px; max-height: 200px; overflow: auto; border: 1px solid var(--rule); padding: 6px }
+.out { white-space: pre-wrap; overflow-wrap: anywhere; font: 400 12px/1.5 var(--mono); max-height: 220px; overflow: auto; border: 1px solid var(--rule); padding: 8px; background: var(--paper) }
+details > summary { cursor: pointer; padding: 8px 10px; font-weight: 600 }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand"><span>SIRDAŞ</span><span id="ver" class="muted"></span></div>
+    <h1 id="t_title"><span class="bar">[OPERASYON_1]</span> yapay zekâya gitmesin.</h1>
+    <p class="muted" id="t_lede">Gizlenecek sütun ve hücreleri seç, maskeli kopyayı biçimiyle aç, yanıtı bu çalışma kitabında geri çevir. Veri bilgisayarından çıkmaz.</p>
+  </header>
+
+  <section>
+    <h2><span class="n">1</span><span id="t_s1">Neyi gizleyeceğini seç</span></h2>
+    <div class="body">
+      <p class="muted" id="t_s1hint">Excel'de bir sütunu, aralığı ya da hücreyi seç, sonra ekle. Tüm sütunu seçersen kural sütuna uygulanır.</p>
+      <div class="row">
+        <select class="s" id="newAct" aria-label="İşlem"></select>
+        <button type="button" class="b go" id="addSel">Seçili aralığı ekle</button>
+      </div>
+      <div class="row"><button type="button" class="b" id="showHeads">Başlıklardan seç</button></div>
+      <div class="heads" id="heads" hidden></div>
+    </div>
+    <div id="rules"></div>
+    <div class="body" style="border-top:1px solid var(--rule)">
+      <label class="check"><input type="checkbox" id="optProp" checked><span id="t_prop">Seçtiğim değerler başka hücrede geçerse orada da gizle</span></label>
+      <label class="check"><input type="checkbox" id="optSheets" checked><span id="t_sheets">Sayfa adlarını gizle</span></label>
+      <label class="check"><input type="checkbox" id="optAuto"><span id="t_auto">Kişisel verileri de otomatik bul</span></label>
+    </div>
+    <details>
+      <summary id="t_tpl">Şablon</summary>
+      <div class="body">
+        <div class="row"><select class="s" id="tplSel" aria-label="Şablon"></select><button type="button" class="b" id="tplApply">Uygula</button></div>
+        <div class="row"><input class="i" id="tplName" maxlength="40" placeholder="Şablon adı"><button type="button" class="b" id="tplSave">Kaydet</button></div>
+        <p class="status" id="tplStatus" role="status"></p>
+      </div>
+    </details>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span><span id="t_s2">Kontrol et ve maskeli kopyayı aç</span></h2>
+    <div class="body">
+      <div id="check"></div>
+      <div class="row"><button type="button" class="b go" id="mask">Maskeli kopya oluştur</button></div>
+      <p class="status" id="maskStatus" role="status"></p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span><span id="t_s3">Yanıtı aç</span></h2>
+    <div class="body">
+      <p class="muted" id="t_s3hint">Yapay zekânın döndürdüğü Excel'i aç ve bu düğmeye bas: etiketler, ölçeklenmiş sayılar ve kaydırılmış tarihler yerinde geri çevrilir. Formüllere dokunulmaz.</p>
+      <div class="row"><button type="button" class="b go" id="restoreWb">Bu çalışma kitabını geri aç</button></div>
+      <label for="reply" id="t_reply">ya da metin yanıtını yapıştır</label>
+      <textarea id="reply" spellcheck="false"></textarea>
+      <div class="out" id="restored"></div>
+      <div class="row"><button type="button" class="b" id="copyRestored">Kopyala</button></div>
+      <p class="status" id="restoreStatus" role="status"></p>
+    </div>
+  </section>
+
+  <section>
+    <details>
+      <summary id="t_key">Anahtar (<span id="keyCount">0</span>)</summary>
+      <div class="body">
+        <p class="muted" id="t_keyhint">Bölme kapanınca anahtar silinir. Parolayla bu bilgisayarda sakla ya da metin olarak al; sitedeki Sırdaş ile aynı biçimdir.</p>
+        <input class="i" id="pass" type="password" autocomplete="off" placeholder="Parola (en az 8 karakter)">
+        <div class="row"><button type="button" class="b" id="keyStore">Bu bilgisayarda sakla</button><button type="button" class="b" id="keyLoadLocal">Saklananı yükle</button></div>
+        <div class="row"><button type="button" class="b" id="keyCopy">Metin olarak kopyala</button></div>
+        <textarea id="keyText" spellcheck="false" placeholder="SIRDAS1."></textarea>
+        <div class="row"><button type="button" class="b" id="keyLoadText">Metinden yükle</button><button type="button" class="b" id="keyReset">Yeni oturum</button></div>
+        <p class="status" id="keyStatus" role="status"></p>
+      </div>
+    </details>
+  </section>
+  <p class="muted" id="t_foot">PolyForm Shield 1.0.0 · sirdas.ysfdurak.com</p>
+</main>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<script src="/lib/xlsx.full.min.js"></script>
+<script src="/src/core.js"></script>
+<script src="/src/ofis.js"></script>
+<script src="eklenti.js"></script>
+</body>
+</html>

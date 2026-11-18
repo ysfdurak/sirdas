@@ -1,11 +1,11 @@
 {
   "name": "sirdas",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Sırdaş: yapay zekâya göndermeden önce tablo ve metinde seçtiğin değerleri maskeleyen, yanıtı geri açan araç (web + yerel MCP).",
   "scripts": {
     "build": "node tools/build.mjs",
-    "test": "node --test \"test/*.test.js\" && cd mcp && node --test sunucu.test.mjs",
+    "test": "node --test \"test/*.test.js\" && cd mcp && node --test sunucu.test.mjs ofis.test.mjs",
     "serve": "python3 -m http.server 8000"
   },
   "license": "SEE LICENSE IN LICENSE.md"

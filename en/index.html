@@ -200,13 +200,26 @@ details.vaultd > summary { padding: 11px 12px; cursor: pointer; font-weight: 600
 .vault textarea { min-height: 70px; border: 1px solid var(--rule); background: transparent; font: 400 12px/1.45 var(--mono); padding: 8px; resize: vertical }
 .vault .btns { display: flex; flex-wrap: wrap; gap: 6px }
 
+.structgrid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); min-height: 320px }
+.structgrid .out { border-left: 1px solid var(--rule); max-height: 560px }
+.fields { overflow: auto; max-height: 560px }
+.frow { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--rule); font-size: 13px }
+.frow.on { background: var(--tint) }
+.frow input[type=checkbox] { margin: 0; accent-color: var(--accent); width: 15px; height: 15px }
+.frow .fp { font: 600 13px var(--mono); overflow-wrap: anywhere; min-width: 0 }
+.frow .fm { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right }
+.frow .fs { grid-column: 2 / -1; color: var(--muted); font: 400 12px var(--mono); overflow-wrap: anywhere }
+.frow .fa { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 6px }
+.sheets .hid { font: 600 10px var(--mono); color: var(--warn); text-transform: uppercase }
+textarea[readonly] { background: var(--tint) }
 .limits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 28px; border-top: 2px solid var(--ink); padding-top: 14px }
 .limits h3 { margin: 0 0 4px; font: 600 15px/1.3 var(--body) }
 .limits p { margin: 0; color: var(--muted); font-size: 14px }
 footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 14px }
 
 @media (max-width: 820px) {
-  .panes, .vault, .limits { grid-template-columns: minmax(0, 1fr) }
+  .panes, .vault, .limits, .structgrid { grid-template-columns: minmax(0, 1fr) }
+  .structgrid .out { border-left: 0; border-top: 1px solid var(--rule) }
   .pane { grid-template-rows: auto minmax(240px, 1fr) }
   .pane textarea, .out { min-height: 240px }
   .colrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) }
@@ -236,12 +249,13 @@ footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: 
     <div class="tabs" role="tablist" data-tal="tabsAria" aria-label="Data type">
       <button type="button" role="tab" id="tabTable" aria-selected="true" aria-controls="viewTable" data-t="tabTable">Table</button>
       <button type="button" role="tab" id="tabText" aria-selected="false" aria-controls="viewText" data-t="tabText">Text</button>
+      <button type="button" role="tab" id="tabStruct" aria-selected="false" aria-controls="viewStruct" data-t="tabStruct">Fields</button>
     </div>
 
     <div class="desk" id="viewTable" role="tabpanel" aria-labelledby="tabTable">
       <div class="bar">
         <span class="label"><span data-t="tableLabel">Table</span> <span class="tag" id="sampleTag" data-t="sample">SAMPLE</span></span>
-        <span class="filebtn"><span data-t="openFile">Open file</span><input type="file" id="file" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt,.md,.json,.log,.xml,.docx" data-tal="openFile" aria-label="Open file"></span>
+        <span class="filebtn"><span data-t="openFile">Open file</span><input type="file" id="file" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt,.md,.json,.log,.xml,.docx,.pptx,.pdf" data-tal="openFile" aria-label="Open file"></span>
         <button type="button" class="b" id="pasteToggle" data-t="pasteTable">Paste table</button>
         <label class="check"><input type="checkbox" id="hdrChk" checked><span data-t="firstRowHeader">First row is header</span></label>
         <label class="check" id="includeWrap" hidden><input type="checkbox" id="includeChk" checked><span data-t="includeSheet">Include this sheet in the file</span></label>
@@ -271,6 +285,7 @@ footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: 
       <div class="colpanel" id="colPanel"></div>
     </div>
 
+    <div class="notice info" id="docBanner" hidden><div class="row"><span id="docBannerText"></span><button type="button" class="b" id="docClose" data-t="docClose">Close document</button></div></div>
     <div class="panes" id="viewText" role="tabpanel" aria-labelledby="tabText" hidden>
       <div class="pane" id="dropText">
         <div class="bar">
@@ -287,6 +302,25 @@ footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: 
           <button type="button" class="b" id="nextMsg" data-t="nextMsg" data-ttl="nextMsgTitle" title="Keeps the labels and clears the box for new text">Next message</button>
         </div>
         <div class="out" id="preview" tabindex="0" data-empty="Maskelenen metin burada görünecek."></div>
+      </div>
+    </div>
+
+    <div class="desk" id="viewStruct" role="tabpanel" aria-labelledby="tabStruct" hidden>
+      <div class="bar">
+        <span class="label"><span data-t="structLabel">JSON or XML</span> <span class="tag" id="structKind" hidden></span></span>
+        <span class="filebtn"><span data-t="openFile">Open file</span><input type="file" id="structFile" accept=".json,.xml,.geojson,.jsonl" data-tal="openFile" aria-label="Open file"></span>
+        <button type="button" class="b" id="structPasteToggle" data-t="structPaste">Paste text</button>
+        <span class="spacer"></span>
+        <button type="button" class="b" id="structClear" data-t="clearSel">Clear selection</button>
+      </div>
+      <div class="pastebox" id="structPasteBox" hidden>
+        <label for="structPasteArea" data-t="structPasteHelp">Paste the JSON or XML text here.</label>
+        <textarea id="structPasteArea" spellcheck="false"></textarea>
+        <div><button type="button" class="b go" id="structPasteApply" data-t="structRead">Find fields</button><button type="button" class="b" id="structPasteCancel" data-t="cancel">Cancel</button></div>
+      </div>
+      <div class="structgrid">
+        <div class="fields" id="fieldList"></div>
+        <div class="out" id="structOut" tabindex="0" data-empty=""></div>
       </div>
     </div>
 
@@ -308,6 +342,8 @@ footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: 
       <div class="sendbar">
         <button type="button" class="b go" id="copyOut" data-t="copy">Copy</button>
         <button type="button" class="b" id="saveXlsx" data-t="saveXlsx">Download Excel</button>
+        <button type="button" class="b" id="saveDoc" hidden></button>
+        <label class="check" id="keepFmtWrap" hidden><input type="checkbox" id="keepFmt" checked><span data-t="keepFmt">Keep formatting</span></label>
         <span class="status" id="sendStatus" role="status"></span>
       </div>
     </div>
@@ -348,11 +384,11 @@ footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: 
 
   <section aria-labelledby="h-back">
     <div class="head"><span class="step" data-t="step3">STEP 3</span><h2 id="h-back" data-t="h3">Unmask the answer</h2></div>
-    <p class="hint" data-t="backHint">Optional. Paste the answer and the labels are swapped back at once. Underlined numbers can be converted back with the factor: click to switch each one. If the answer came as an Excel file, open it and download the unmasked copy.</p>
+    <p class="hint" data-t="backHint">Optional. Paste the answer and the labels are swapped back at once. Underlined numbers can be converted back with the factor: click to switch each one. If the answer came as an Excel, Word, PowerPoint, JSON or XML file, open it; the unmasked copy downloads with its formatting.</p>
     <div class="panes">
       <div class="pane">
         <div class="bar"><label class="label grow" for="reply"><span data-t="replyLabel">The AI’s answer</span> <span class="tag" id="replyTag" data-t="sample">SAMPLE</span></label>
-          <span class="filebtn" id="replyXlsxBtn"><span data-t="replyXlsx">Open Excel answer</span><input type="file" id="replyXlsx" accept=".xlsx,.xls,.xlsm,.ods" data-tal="replyXlsx" aria-label="Open Excel answer"></span>
+          <span class="filebtn" id="replyXlsxBtn"><span data-t="replyXlsx">Open answer file</span><input type="file" id="replyXlsx" accept=".xlsx,.xlsm,.xls,.ods,.docx,.pptx,.json,.xml,.csv,.md,.txt" data-tal="replyXlsx" aria-label="Open answer file"></span>
           <button type="button" class="b" id="clearReply" data-t="clear">Clear</button></div>
         <textarea id="reply" spellcheck="false" data-tph="replyPh" placeholder="Paste the answer here."></textarea>
       </div>
@@ -370,6 +406,7 @@ footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: 
   <section class="limits" aria-label="Limits" data-tal="limitsAria">
     <div><h3 data-t="lim1h">Anything you don’t pick is sent as is</h3><p data-t="lim1p">Every cell you don’t hide goes out unchanged, column headers included. The check step lists hidden values left visible and sheets with nothing hidden; still take one look before you send.</p></div>
     <div><h3 data-t="lim2h">Scaling is not encryption</h3><p data-t="lim2p">The factor keeps ratios, so someone who knows one real value can work it out. If the figure itself is very sensitive, convert it to a range or remove the column. Dates move by whole weeks, so the weekday stays the same.</p></div>
+    <div><h3 data-t="lim4h">Images are not changed</h3><p data-t="lim4p">In Word and PowerPoint, text, tables, notes, headers and chart labels are hidden; text inside pictures is not. A PDF’s layout is not kept, only its text; a scanned PDF has no text.</p></div>
     <div><h3 data-t="lim3h">Reversible while the key exists</h3><p data-t="lim3p">This is pseudonymisation, not anonymisation. Keep the key file and its password in different places. Your company’s rules and data protection law still apply to company data.</p></div>
   </section>
   <footer>
@@ -379,10 +416,11 @@ footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: 
     <a href="https://ysfdurak.com" target="_blank" rel="noopener">ysfdurak.com</a>
   </footer>
 </div>
-<script>window.SIRDAS_ENV={xlsxUrl:'/lib/xlsx.full.min.js',mammothUrl:'/lib/mammoth.browser.min.js',workerUrl:'/src/worker.js'}</script>
-<script src="/src/core.js?v=1.0.0"></script>
-<script src="/src/i18n.js?v=1.0.0"></script>
-<script src="/src/app.js?v=1.0.0"></script>
+<script>window.SIRDAS_ENV={xlsxUrl:'/lib/xlsx.full.min.js',exceljsUrl:'/lib/exceljs.min.js',jszipUrl:'/lib/jszip.min.js',pdfUrl:'/lib/pdf.min.js',pdfWorkerUrl:'/lib/pdf.worker.min.js',workerUrl:'/src/worker.js'}</script>
+<script src="/src/core.js?v=1.1.0"></script>
+<script src="/src/ofis.js?v=1.1.0"></script>
+<script src="/src/i18n.js?v=1.1.0"></script>
+<script src="/src/app.js?v=1.1.0"></script>
 <script>if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js').catch(function(){});</script>
 
 </body>

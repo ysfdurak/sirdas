@@ -6,20 +6,22 @@ Bu belge, projeyi kendin değiştirebilmen ve sorulduğunda anlatabilmen için y
 
 ```
 sirdas/
-├─ src/core.js        ← ÇEKİRDEK: maskeleme, geri açma, şablon, şifreleme. DOM ve ağ yok.
+├─ src/core.js        ← ÇEKİRDEK: maskeleme, geri açma, şablon, şifreleme, XML tarayıcı, JSON/XML alanları. DOM ve ağ yok.
+├─ src/ofis.js        ← Office katmanı: biçimli Excel (ExcelJS), Word ve PowerPoint (JSZip), PDF metni (pdf.js)
 ├─ src/app.js         ← web arayüzü (ekran, seçim, dosya işleri)
 ├─ src/i18n.js        ← Türkçe ve İngilizce arayüz metinleri
 ├─ src/worker.js      ← arka plan hesaplayıcısı (büyük tablolar için)
 ├─ web/source.html    ← sayfanın HTML iskeleti ve CSS'i (DÜZENLEDİĞİN dosya)
 ├─ tools/build.mjs    ← source.html'den index.html, en/index.html, dist/artifact.html üretir
 ├─ index.html, en/    ← ÜRETİLİR (elle düzenleme, üzerine yazılır)
-├─ mcp/               ← yerel MCP sunucusu (sunucu.mjs) ve işlemleri (islemler.mjs)
-├─ test/core.test.js  ← çekirdek testleri; mcp/sunucu.test.mjs uçtan uca MCP testi
-├─ lib/               ← SheetJS 0.20.3, Mammoth 1.6.0, yazı tipleri, lisansları
+├─ eklenti/           ← Excel eklentisi: manifest.xml, gorev.html, eklenti.js, ikonlar
+├─ mcp/               ← yerel MCP sunucusu (sunucu.mjs), işlemleri (islemler.mjs), testleri
+├─ test/core.test.js  ← çekirdek testleri; test/ornek/ deneme belgeleri; test/eklenti/ sahte Excel'le eklenti denemesi
+├─ lib/               ← SheetJS 0.20.3, ExcelJS 4.4.0, JSZip 3.10.1, pdf.js 3.11.174, yazı tipleri, lisansları
 └─ sw.js, wrangler.jsonc, .assetsignore, _headers, sitemap.xml, robots.txt, favicon.svg, og.png
 ```
 
-**Neden tek çekirdek?** Web, Worker, MCP ve testler aynı `core.js` dosyasını kullanır. Bir kural değişince dört yerde değil, bir yerde değişir ve testler hepsini birden korur. Bu, projelerde istediğin “aynı çekirdek üzerinde web + MCP” ikili yapısının kendisi.
+**Neden tek çekirdek?** Web, Worker, Excel eklentisi, MCP ve testler aynı `core.js` ve `ofis.js` dosyalarını kullanır. Bir kural değişince dört yerde değil, bir yerde değişir ve testler hepsini birden korur. Bu, projelerde istediğin “aynı çekirdek üzerinde web + MCP” ikili yapısının kendisi.
 
 ## 2. Çekirdeğin içi (src/core.js)
 
@@ -67,6 +69,45 @@ Değişmeyen hücre özgün değerini korur (metin, sayı ya da tarih). Değişe
 - **Şablonlar:** Tarayıcıda (`localStorage`, `sirdas_sablonlar`) saklanır, `.json` olarak alınıp verilebilir. Dosya açılınca uyan şablon varsa (%60 ve üstü) önerilir.
 - **Ortam (`SIRDAS_ENV`):** Sitede kütüphaneler `/lib/`, Worker `/src/worker.js` yolundan gelir ve indirme tarayıcının kendisiyle yapılır. claude.ai sayfasında kütüphaneler jsDelivr'den gelir, Worker kodu sayfaya gömülüdür, indirme claude.ai'nin indirme onayıyla yapılır.
 
+
+## 3b. Biçimi koruyan katman (src/ofis.js)
+
+### Excel: neden iki kütüphane?
+SheetJS hızlı okur ama ücretsiz sürümü biçimi yazamaz. ExcelJS biçimi korur ama okuması yavaştır. Bu yüzden iş bölündü:
+- **Okuma (SheetJS):** Ekrandaki ızgara ve `maskBook` SheetJS'in okuduğu değerlerle çalışır. `bookFromSheetJS`, her satırın Excel'deki gerçek satır numarasını (`pos.r`) ve ilk sütunu (`pos.c0`) saklar. Boş satırlar atlansa da hücre asıl yerine yazılabilir.
+- **Yazma (ExcelJS):** `excelMaskPreserve`, asıl dosyayı ExcelJS ile açar ve yalnızca hücre **değerlerini** değiştirir; stil olduğu gibi kalır.
+- **Temizlik:** Notlar ExcelJS'e verilmeden dosyadan sökülür (`stripNotes`). Hem değer sızdırırlar hem de bazı programların yazdığı not biçimini ExcelJS okuyamaz. Ardından formüller değere çevrilir; açılır listeler, koşullu biçimler, tablolar, görseller, tanımlı adlar, üst ve alt bilgiler ve belge özellikleri silinir.
+- **Birleştirilmiş hücreler:** ExcelJS'te alt hücreye yazmak ana hücreyi değiştirir, bu yüzden alt hücreler atlanır.
+- **Grafik ve pivot tablolar:** ExcelJS bunları yeniden yazmaz, böylece önbelleklerindeki gerçek veri de dosyaya girmez.
+
+### Word ve PowerPoint: XML tarayıcı
+Bir .docx ya da .pptx, içinde XML dosyaları olan bir zip'tir. Metin `<w:t>` (Word) ve `<a:t>` (PowerPoint) öğelerinde durur; bir paragraf da (`<w:p>`, `<a:p>`) birden çok "parça"ya (run) bölünebilir. Örneğin "**Proje** Atlas" yazıldığında "Proje" kalın bir parça, "Atlas" ayrı bir parçadır.
+1. **Tarama:** `xmlScan`, XML'i DOM kurmadan tarar ve her metin düğümünün başlangıç ve bitiş konumunu, hangi paragrafa ait olduğunu verir. DOM kurmadığı için tarayıcıda ve Node'da aynı çalışır, dosyanın geri kalanına da hiç dokunmaz.
+2. **Maskeleme:** Paragrafın parçaları birleştirilir ve `maskTexts` ile maskelenir. Bütün paragraflar tek defterle, iki turda işlenir; 5. paragrafta bulunan ad 2. paragrafta da gizlenir.
+3. **Dağıtma:** `redistribute` etiketi değerin başladığı parçaya yazar ve değerin diğer parçalardaki harflerini siler. Etiket ilk parçanın biçimini alır.
+4. **Yazma:** `xmlApply`, yalnızca değişen metin aralıklarını yazar.
+5. **Temizlik:** `scrub` belge özelliklerini, yorum ve değişiklik yazarlarını, önizleme resmini ve gömülü nesneleri (grafiklerin Excel verisi) temizler. Bağlantı adreslerindeki değerler de maskelenir.
+
+Geri açma aynı yolu tersinden izler.
+
+### JSON ve XML alanları
+`structFields`, JSON'da `kayitlar[].musteri.ad`, XML'de `Liste/Musteri/Ad` ve öznitelik için `Liste/Musteri/@vkn` biçiminde alan yolları çıkarır. `maskStruct` kuralları bu yollarla uygular.
+- **JSON:** Veri yeniden yazılır; girinti korunur.
+- **XML:** Yalnızca değişen aralıklar yazılır, böylece yorumlar, boşluklar ve öznitelik sırası aynen kalır.
+- **Geri açma:** Ölçeklenen ve kaydırılan alanlar alan adıyla tanınır, Excel'deki başlık adı mantığının aynısı.
+
+### PDF
+pdf.js sayfaların metnini çıkarır ve metin Metin görünümünde maskelenir. Maskeli bir PDF üretmek, sayfa düzenini ve yazı tiplerini yeniden kurmayı gerektirir; bu sürümde bilerek yapılmadı.
+
+### Sayıların geri dönüşü: roundest
+Ölçeklenen sayının son hanesi yuvarlandığı için geri bölününce 411999,996 gibi bir sonuç çıkar. `roundest`, maskeli değerin hassasiyetinin izin verdiği aralıktaki en yuvarlak değeri seçer: ±0,5 son hane ÷ katsayı aralığında kalan 412000. Excel ve JSON'daki sayı hücreleri iki ondalık fazla saklanır, bu yüzden tam döner.
+
+## 3c. Excel eklentisi (eklenti/)
+- **Kural:** Bölme Excel'deki seçimi kurala çevirir. Seçim kullanılan alanın tamamını kaplıyorsa sütun kuralı olur, kaplamıyorsa hücre kuralı.
+- **Maskeli kopya:** `Office.context.document.getFileAsync` kitabın dosyasını dilimler halinde verir. Dosya web sürümündeki yoldan geçer: SheetJS → `maskBook` → `excelMaskPreserve`. Sonuç `Excel.createWorkbook` ile yeni kitap olarak açılır.
+- **Geri açma:** Kullanılan alanın `formulas` matrisi okunur; formül olmayan hücreler çevrilir ve matris geri yazılır, böylece formüller korunur. Tarih hücreleri Excel'de seri sayıdır; geri kaydırmak için seri sayıdan gün farkı çıkarılır.
+- **Deneme:** Gerçek Excel olmadan `test/eklenti/office-mock.js` küçük bir Excel nesne modeli taklidi kurar.
+
 ## 4. Değiştirme tarifleri
 - **Yeni bir sütun işlemi eklemek:**
   1. `core.js` → `maskBook` 1. turunda `rule.action === 'yeni'` dalını yaz.
@@ -78,8 +119,9 @@ Değişmeyen hücre özgün değerini korur (metin, sayı ya da tarih). Değişe
 - **Sürüm çıkarmak:** `core.js` içindeki `VERSION`, iki `package.json` ve `sw.js` içindeki `CACHE` adını güncelle; ardından `npm run build` ve `npm test`.
 
 ## 5. Testler
-`npm test` iki şey çalıştırır:
-- **Çekirdek testleri (18):** Doğrulayıcılar, etiket tutarlılığı, değer yayma, sızıntı, çıkarma, ölçekleme ve geri çevirme, tarih kaydırma (haftanın günü), aralık ve grup, hücre ve delik, çok sayfa, şablon, şifreleme, sayı ayrıştırma ve 20.000 satırlık hız testi.
+`npm test` üç şey çalıştırır:
+- **Çekirdek testleri (23):** Doğrulayıcılar, etiket tutarlılığı, değer yayma, sızıntı, çıkarma, ölçekleme ve geri çevirme, tarih kaydırma (haftanın günü), aralık ve grup, hücre ve delik, çok sayfa, şablon, şifreleme, sayı ayrıştırma, 20.000 satırlık hız testi; ayrıca bölünmüş paragraflar, JSON ve XML alanları.
+- **Ofis testleri (4):** Biçimli Excel (renk, sayı biçimi, temizlik, geri açma), Word, PowerPoint (grafik verisi dahil) ve PDF; deneme belgeleri `test/ornek/` içinde.
 - **MCP testi:** Gerçek bir MCP istemcisiyle sunucuyu başlatır, dosyayı maskeler, yanıtı kaydeder, dosyayı geri açar. Sonunda yapay zekâ tarafına giden her yanıtta gerçek değer aranır; bulunursa test başarısız olur.
 
 ## 6. Bilerek yapılmayanlar
@@ -87,8 +129,13 @@ Değişmeyen hücre özgün değerini korur (metin, sayı ya da tarih). Değişe
 - **Sunucu (VPS):** Gerekmiyor. Her şey yerelde çalışıyor; bu, aracın güvenilirliğinin temeli.
 - **Gerçekçi sahte değer (ör. `Selin Aksoy` yerine `Ayla Kurt`):** Yapay zekâ sahte değeri gerçek sanıp yanıtta geri açılması zor hale getirebilir. Köşeli parantezli etiket her zaman geri bulunur.
 - **Formül aktarmak:** Formül, gizli bir hücreye başvurarak değeri sızdırabilir. Yalnızca değerler aktarılır.
+- **Maskeli PDF:** PDF'te metin, konumu ve yazı tipiyle çizilir. Değiştirmek için sayfayı yeniden kurmak gerekir; metin çıkarmak yeterince işe yarıyor.
+- **Görsellerin içindeki yazı:** Metin tanıma (OCR) gerekirdi. Excel'de görseller silinir; Word ve PowerPoint'te bırakılır ve rapor kaç görsel olduğunu söyler.
 
 ## 7. Sorulabilecek sorular
+- **“Word'de bir kelime yarısı kalın yazılmışsa ne olur?”** Paragrafın parçaları birleştirilip maskelenir, etiket ilk parçaya yazılır, diğer parçalardaki harfler silinir. Biçim kalır, değer bölünmüş haliyle de sızmaz.
+- **“Excel'de biçimi koruyunca formüller ne oluyor?”** Değere çevriliyor. Bir formül, gizlenen bir hücreye başvurarak ya da içindeki sabit metinle değeri ele verebilir.
+- **“Eklenti verimi Microsoft'a gönderiyor mu?”** Hayır. Bölme yalnızca kendi adresinden dosya yükler. Maskeleme bölmenin içinde, yani bilgisayarda yapılır; yeni kitabı Excel'in kendisi açar.
 - **“Bu anonimleştirme mi?”** Hayır, takma adlandırma (pseudonymisation). Anahtar var oldukça geri çevrilebilir. Anonim olsaydı yanıtı geri açamazdık.
 - **“Yapay zekâ etiketleri bozarsa ne olur?”** Geri açma `\[OPERASYON\_1\]`, köşeli parantezsiz `OPERASYON_1` ve küçük harf yazımları da tanır. Anahtarda olmayan etiketleri ayrıca listeler.
 - **“Aynı kişi iki mesajda farklı etiket alırsa?”** Almaz. Etiketin kimliği değerin küçük harfli, boşlukları düzeltilmiş halidir (`V|proje atlas`). Anahtar dosyasıyla günler arasında da aynı kalır.

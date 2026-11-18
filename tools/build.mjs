@@ -44,8 +44,9 @@ function sitePage(lang) {
   let body = src.replace(/<title[^>]*>.*?<\/title>\n?/, '').replace(/<meta name="claude:viewport-fit-sides"[^>]*>\n?/, '');
   body = translate(body, lang);
   body = body.replace('<!--@FONTS-->\n', '');
-  body = body.replace('<!--@SCRIPTS-->', `<script>window.SIRDAS_ENV={xlsxUrl:'/lib/xlsx.full.min.js',mammothUrl:'/lib/mammoth.browser.min.js',workerUrl:'/src/worker.js'}</script>
+  body = body.replace('<!--@SCRIPTS-->', `<script>window.SIRDAS_ENV={xlsxUrl:'/lib/xlsx.full.min.js',exceljsUrl:'/lib/exceljs.min.js',jszipUrl:'/lib/jszip.min.js',pdfUrl:'/lib/pdf.min.js',pdfWorkerUrl:'/lib/pdf.worker.min.js',workerUrl:'/src/worker.js'}</script>
 <script src="/src/core.js?v=${VERSION}"></script>
+<script src="/src/ofis.js?v=${VERSION}"></script>
 <script src="/src/i18n.js?v=${VERSION}"></script>
 <script src="/src/app.js?v=${VERSION}"></script>
 <script>if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js').catch(function(){});</script>`);
@@ -88,12 +89,13 @@ ${body}
 }
 
 function artifactPage() {
-  const core = read('src/core.js'), worker = read('src/worker.js'), i18n = read('src/i18n.js'), app = read('src/app.js');
-  const env = { artifact: true, xlsxUrl: 'https://cdn.jsdelivr.net/npm/@e965/xlsx@0.20.3/dist/xlsx.full.min.js', mammothUrl: 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js', workerSrc: core + '\n' + worker };
+  const core = read('src/core.js'), ofis = read('src/ofis.js'), worker = read('src/worker.js'), i18n = read('src/i18n.js'), app = read('src/app.js');
+  const J = 'https://cdn.jsdelivr.net/npm/';
+  const env = { artifact: true, xlsxUrl: J + '@e965/xlsx@0.20.3/dist/xlsx.full.min.js', exceljsUrl: J + 'exceljs@4.4.0/dist/exceljs.min.js', jszipUrl: J + 'jszip@3.10.1/dist/jszip.min.js', pdfUrl: J + 'pdfjs-dist@3.11.174/build/pdf.min.js', pdfWorkerUrl: J + 'pdfjs-dist@3.11.174/build/pdf.worker.min.js', workerSrc: core + '\n' + worker };
   const inline = s => s.replace(/<\/script/gi, '<\\/script');
   return translate(src, 'tr')
     .replace('<!--@FONTS-->', '<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">')
-    .replace('<!--@SCRIPTS-->', () => `<script>window.SIRDAS_ENV=${inline(JSON.stringify(env))};</script>\n<script>${inline(core)}</script>\n<script>${inline(i18n)}</script>\n<script>${inline(app)}</script>`);
+    .replace('<!--@SCRIPTS-->', () => `<script>window.SIRDAS_ENV=${inline(JSON.stringify(env))};</script>\n<script>${inline(core)}</script>\n<script>${inline(ofis)}</script>\n<script>${inline(i18n)}</script>\n<script>${inline(app)}</script>`);
 }
 
 mkdirSync(root + 'en', { recursive: true }); mkdirSync(root + 'dist', { recursive: true });

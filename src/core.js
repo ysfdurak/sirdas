@@ -16,7 +16,7 @@
   else root.Sirdas = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
 
   /* ---------------- 1. Metin yardımcıları ---------------- */
   const tl = s => String(s).toLocaleLowerCase('tr');
@@ -300,14 +300,25 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
     const res = analyzeString(text, key, led, opts, true);
     return { ...res, masked: partsToText(res.parts), added: led.fresh, counts: led.counts };
   }
-  function analyzeString(text, key, led, opts, withSuggestions) {
+  function textCtx(key, led, opts) {
     const excluded = new Set(key.excluded);
     const entries = allEntries(key, led.fresh);
-    const ctx = {
+    return {
+      excluded,
       auto: !!opts.auto, cats: new Set(opts.cats || DEFAULT_CATS), manual: opts.manual || [],
       known: entries.filter(e => !excluded.has(e.key)),
       fullNames: entries.filter(e => e.cat === 'AD' && !e.part && e.value.includes(' ') && e.key.startsWith('AD|')).map(e => e.value)
     };
+  }
+  function analyzeString(text, key, led, opts, withSuggestions, preCtx) {
+    const excluded = preCtx ? preCtx.excluded : new Set(key.excluded);
+    const entries = preCtx ? null : allEntries(key, led.fresh);
+    const ctx = preCtx || {
+      auto: !!opts.auto, cats: new Set(opts.cats || DEFAULT_CATS), manual: opts.manual || [],
+      known: entries.filter(e => !excluded.has(e.key)),
+      fullNames: entries.filter(e => e.cat === 'AD' && !e.part && e.value.includes(' ') && e.key.startsWith('AD|')).map(e => e.value)
+    };
+    if (preCtx && !preCtx.matcherReady) { preCtx.matcherReady = true; }
     const taken = [], accepted = [];
     const cands = findCandidates(text, ctx).sort((x, y) => x.prio - y.prio || x.a - y.a || (y.b - y.a) - (x.b - x.a));
     for (const c of cands) {
@@ -402,7 +413,10 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
   function parseDate(v) {
     if (v instanceof Date) return isNaN(v) ? null : { d: v, fmt: null, local: true };
     if (typeof v !== 'string') return null;
-    const m = v.trim().match(new RegExp('^' + DATE_RE_SRC + '$', 'u'));
+    const t = v.trim();
+    const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})(T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)$/);
+    if (iso) { if (!validYMD(+iso[1], +iso[2], +iso[3])) return null; return { d: new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3])), fmt: { type: 'iso' }, rest: iso[4] }; }
+    const m = t.match(new RegExp('^' + DATE_RE_SRC + '$', 'u'));
     return m ? dateFromMatch(m) : null;
   }
   function formatDate(d, fmt) {
@@ -472,7 +486,7 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
             if (rule.action === 'drop') { addPool(t, label); return; }
             if (rule.action === 'scale') {
               const p = parseNumber(typeof raw === 'number' ? raw : t, lang);
-              if (p) { const x = p.n * key.factor; o = { p: [{ x: formatNumber(x, p.decimals, p.style), v: t, k: 's' }] }; stats.scaled++; }
+              if (p) { const x = p.n * key.factor; o = { p: [{ x: formatNumber(x, p.style ? p.decimals : p.decimals + 2, p.style), v: t, k: 's' }] }; stats.scaled++; }
             } else if (rule.action === 'bucket') {
               const p = parseNumber(typeof raw === 'number' ? raw : t, lang);
               if (p) { o = { p: [{ x: bucketLabel(p.n, steps[c], lang), v: t, k: 'b' }] }; stats.bucketed++; }
@@ -614,7 +628,7 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
       if (!e) { if (m[1]) unknown.add(tok); continue; }
       if (off.has(e.cat)) { held.add(tok); continue; }
       if (m.index > last) out.push(text.slice(last, m.index));
-      out.push({ v: e.value, t: tok }); done++;
+      out.push({ v: e.value, t: tok, src: m[0] }); done++;
       last = m.index + m[0].length;
       const after = text.slice(last).match(/^['’](\p{L}+)/u);
       if (after && badHarmony(e.value, after[1])) harmony.push(`${e.value}'${after[1]}`);
@@ -654,9 +668,9 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
         const idx = i++;
         const def = Math.abs(pn.n) >= 100;
         const on = state[idx] !== undefined ? state[idx] : def;
-        const real = pn.n / key.factor;
+        const rr = roundest(pn.n / key.factor, pn.decimals, key.factor);
         if (m.index > last) o.push(p.slice(last, m.index));
-        o.push({ num: true, i: idx, from: m[0], to: String(formatNumber(real, pn.decimals, pn.style || { pre: '', sign: '-', grp: '', dec: '.', suf: '' })), on });
+        o.push({ num: true, i: idx, from: m[0], to: String(formatNumber(rr.n, rr.k, pn.style || { pre: '', sign: '-', grp: '', dec: '.', suf: '' })), on });
         if (on) count();
         last = m.index + m[0].length;
       }
@@ -664,13 +678,22 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
       return o;
     });
   }
+  /**
+   * Ölçeklenmiş sayıyı katsayıya bölerken: maskeli değerin son hanesi ±0,5 belirsizdir, bölünce bu ±0,5/katsayı olur.
+   * Bu pencerenin içindeki en yuvarlak değeri seçeriz: 411999,996 → 412000.
+   */
+  function roundest(real, d, factor) {
+    const tol = 0.5 * 10 ** -d / factor + 1e-9;
+    for (let k = 0; k <= d + 2; k++) { const r = Math.round(real * 10 ** k) / 10 ** k; if (Math.abs(r - real) <= tol) return { n: r, k }; }
+    return { n: real, k: d };
+  }
   const restoredToText = parts => parts.map(p => typeof p === 'string' ? p : p.t ? p.v : p.date ? p.to : p.num ? (p.on ? p.to : p.from) : '').join('');
 
   /** Excel hücresi için geri açma. header: hücrenin sütun başlığı (ölçeklenen/kaydırılan sütunları tanımak için). */
   function restoreValue(value, key, opts, header) {
     const h = header != null ? normHeader(header) : null;
     if (typeof value === 'number') {
-      if (opts.numbers && h && key.scaled.headers.includes(h)) { const d = decimalsOf(value); return { value: Math.round(value / key.factor * 10 ** d) / 10 ** d, changed: 1 }; }
+      if (opts.numbers && h && key.scaled.headers.includes(h)) return { value: roundest(value / key.factor, decimalsOf(value), key.factor).n, changed: 1 };
       return { value, changed: 0 };
     }
     if (value instanceof Date) {
@@ -791,10 +814,263 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
     return lines.map(l => splitCells(l, d).map(c => unq(c.t)));
   }
   /** Kitabı her satırı aynı genişlikte, metin hücreli hale getirir. */
-  function makeSheet(name, rows, raw) {
+  /**
+   * Kitabı her satırı aynı genişlikte, metin hücreli hale getirir.
+   * pos: { r:[Excel satır no (0'dan)], c0: ilk sütun } — biçimi koruyan çıktıda hücreyi asıl yerine yazmak için.
+   */
+  function makeSheet(name, rows, raw, pos, hidden) {
     const w = rows.reduce((m, r) => Math.max(m, r.length), 0);
     const fix = rs => rs.map(r => { const x = r.slice(); while (x.length < w) x.push(''); return x; });
-    return { name: String(name), rows: fix(rows).map(r => r.map(v => v == null ? '' : String(v))), raw: raw ? fix(raw) : null, w };
+    return { name: String(name), rows: fix(rows).map(r => r.map(v => v == null ? '' : String(v))), raw: raw ? fix(raw) : null, w, pos: pos || null, hidden: !!hidden };
+  }
+
+
+  /* ---------------- 11. Çok parçalı metin (Word, PowerPoint, PDF) ---------------- */
+  /**
+   * Birçok metni tek defterle maskeler: aynı değer her paragrafta aynı etiketi alır.
+   * İki tur çalışır: ilk turda bulunan bir ad, ikinci turda önceki paragraflarda da gizlenir.
+   */
+  function maskTexts(texts, key, opts = {}) {
+    const reserved = new Set();
+    for (const t of texts) for (const m of String(t).matchAll(TOKEN_IN_TEXT)) reserved.add(m[1]);
+    const led = makeLedger(key, reserved);
+    const run = () => { const ctx = textCtx(key, led, opts); return texts.map(t => (t && /[\p{L}\p{N}]/u.test(t)) ? analyzeString(t, key, led, opts, false, ctx).parts : [t]); };
+    run();
+    for (const k in led.counts) led.counts[k] = 0;
+    const parts = run();
+    for (const k in led.counts) if (!led.counts[k]) delete led.counts[k];
+    return { parts, added: led.fresh, counts: led.counts, hidden: parts.reduce((a, ps) => a + ps.filter(p => typeof p !== 'string').length, 0) };
+  }
+
+  /* ---------------- 12. XML tarayıcı (biçimi koruyarak metin değiştirme) ---------------- */
+  const decodeXml = s => s.replace(/&(?:#(\d+)|#x([0-9a-fA-F]+)|(lt|gt|amp|quot|apos));/g, (m, d, h, n) => d ? String.fromCodePoint(+d) : h ? String.fromCodePoint(parseInt(h, 16)) : { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" }[n]);
+  const encodeXml = (s, attr) => { s = String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); return attr ? s.replace(/"/g, '&quot;') : s; };
+  const localName = q => q.slice(q.indexOf(':') + 1);
+  /**
+   * XML'i DOM kurmadan tarar. Dönüş: düğümler listesi.
+   *  { kind:'text', start, end, value, path, tag, group, openStart, openEnd }  (start-end: içerik aralığı)
+   *  { kind:'attr', start, end, value, path, name, element }
+   *  { kind:'elem', start, end, path }   (öğenin tamamı; alan çıkarmada kullanılır)
+   * textTags verilirse yalnızca o öğelerin metni alınır (Word: w:t), verilmezse her metin düğümü.
+   * paraTags: aynı paragraftaki metin düğümleri aynı grubu alır.
+   */
+  function xmlScan(xml, opt = {}) {
+    const textTags = opt.textTags ? new Set(opt.textTags) : null, paraTags = new Set(opt.paraTags || []);
+    const re = /<!--[\s\S]*?-->|<!\[CDATA\[([\s\S]*?)\]\]>|<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>|<(\/?)([A-Za-z_][\w.:-]*)((?:\s+[^\s=/>]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>/g;
+    const out = [], stack = [], paras = [];
+    let gid = 0, m, last = 0;
+    const path = () => stack.map(x => x.local).join('/');
+    const pushText = (a, b, raw, cdata) => {
+      if (textTags || b <= a) return;
+      if (!/\S/.test(raw)) return;
+      out.push({ kind: 'text', start: a, end: b, value: cdata ? raw : decodeXml(raw), path: path(), tag: stack.length ? stack[stack.length - 1].name : '', group: ++gid, cdata: !!cdata });
+    };
+    while ((m = re.exec(xml))) {
+      if (m.index > last) pushText(last, m.index, xml.slice(last, m.index));
+      last = re.lastIndex;
+      if (m[1] !== undefined) { pushText(m.index + 9, re.lastIndex - 3, m[1], true); continue; }
+      if (!m[3]) continue;
+      const close = m[2] === '/', self = m[5] === '/', name = m[3], local = localName(name);
+      if (close) {
+        const top = stack.pop();
+        if (top && opt.elements) out.push({ kind: 'elem', start: top.start, end: re.lastIndex, path: stack.map(x => x.local).concat(top.local).join('/') });
+        if (paraTags.has(name)) paras.pop();
+        continue;
+      }
+      if (opt.attrs && m[4]) {
+        const base = m.index + 1 + name.length, ar = /\s+([^\s=/>]+)\s*=\s*("([^"]*)"|'([^']*)')/g; let a;
+        while ((a = ar.exec(m[4]))) {
+          const vs = base + a.index + a[0].length - a[2].length + 1, val = a[3] !== undefined ? a[3] : a[4];
+          if (/^xmlns(:|$)/.test(a[1])) continue;
+          out.push({ kind: 'attr', start: vs, end: vs + val.length, value: decodeXml(val), path: stack.map(x => x.local).concat(local).join('/') + '/@' + localName(a[1]), name: a[1], element: name, attrStart: base + a.index, attrEnd: base + a.index + a[0].length });
+        }
+      }
+      if (self) { if (opt.elements) out.push({ kind: 'elem', start: m.index, end: re.lastIndex, path: stack.map(x => x.local).concat(local).join('/') }); continue; }
+      if (paraTags.has(name)) paras.push(++gid);
+      if (textTags && textTags.has(name)) {
+        const endTag = '</' + name + '>', ci = xml.indexOf(endTag, re.lastIndex);
+        if (ci < 0) continue;
+        out.push({ kind: 'text', start: re.lastIndex, end: ci, value: decodeXml(xml.slice(re.lastIndex, ci)), path: path() + '/' + local, tag: name, group: paras.length ? paras[paras.length - 1] : ++gid, openStart: m.index, openEnd: re.lastIndex });
+        re.lastIndex = ci + endTag.length; last = re.lastIndex;
+        continue;
+      }
+      stack.push({ name, local, start: m.index });
+    }
+    return out;
+  }
+  /** Aralıkları (start, end, text) uygulayarak yeni XML üretir. Aralıklar çakışmamalı. */
+  function xmlApply(xml, edits) {
+    edits = edits.slice().sort((a, b) => a.start - b.start);
+    let o = '', last = 0;
+    for (const e of edits) { if (e.start < last) continue; o += xml.slice(last, e.start) + e.text; last = e.end; }
+    return o + xml.slice(last);
+  }
+  /**
+   * Bir paragrafın metin düğümlerine maskelenmiş parçaları dağıtır.
+   * Etiket, değerin başladığı düğüme yazılır; değerin diğer düğümlerdeki harfleri silinir. Böylece "Proje " + "Atlas"
+   * iki ayrı biçimde yazılmış olsa da tek etikete döner ve ilk parçanın biçimini alır.
+   * render(p): parçayı metne çevirir (maskelemede "[ETIKET]", geri açmada gerçek değer).
+   */
+  function redistribute(texts, parts, render) {
+    const bounds = []; let pos = 0;
+    for (const t of texts) { bounds.push([pos, pos + t.length]); pos += t.length; }
+    const out = texts.map(() => '');
+    const nodeAt = o => { for (let i = 0; i < bounds.length; i++) if (o < bounds[i][1] || i === bounds.length - 1) return i; return 0; };
+    let o = 0;
+    for (const p of parts) {
+      if (typeof p === 'string') {
+        let i = 0;
+        while (i < p.length) { const n = nodeAt(o), take = Math.min(p.length - i, Math.max(1, bounds[n][1] - o)); out[n] += p.slice(i, i + take); i += take; o += take; }
+      } else { const len = (p.src != null ? p.src : p.from != null ? p.from : p.v).length; out[nodeAt(o)] += render(p); o += len; }
+    }
+    return out;
+  }
+
+  /* ---------------- 13. JSON ve XML: alan yoluna göre seçim ---------------- */
+  /** JSON'da her değerin yolu: "siparisler[].musteri.ad". Callback(yol, değer, kap, anahtar) */
+  function walkJSON(v, fn, path = '', holder = null, k = null) {
+    if (Array.isArray(v)) { v.forEach((x, i) => walkJSON(x, fn, path + '[]', v, i)); return; }
+    if (v && typeof v === 'object') { for (const key of Object.keys(v)) walkJSON(v[key], fn, path ? path + '.' + key : key, v, key); return; }
+    fn(path, v, holder, k);
+  }
+  const lastSeg = p => String(p).replace(/\[\]/g, '').split(/[./]/).filter(Boolean).pop() || p;
+  /** Alanların listesi: yol, adet, tür, örnek. kind: 'json' | 'xml' */
+  function structFields(text, kind) {
+    const map = new Map();
+    const add = (path, v) => {
+      let f = map.get(path); if (!f) { f = { path, name: lastSeg(path).replace(/^@/, ''), count: 0, num: 0, date: 0, str: 0, samples: [] }; map.set(path, f); }
+      f.count++;
+      if (typeof v === 'number' || (typeof v === 'string' && parseNumber(v))) f.num++;
+      else if (typeof v === 'string' && parseDate(v)) f.date++;
+      else f.str++;
+      if (f.samples.length < 3 && v !== '' && v != null && !f.samples.includes(String(v))) f.samples.push(String(v));
+    };
+    if (kind === 'json') walkJSON(JSON.parse(text), (p, v) => { if (v !== null && typeof v !== 'boolean') add(p, v); });
+    else for (const n of xmlScan(text, { attrs: true })) if (n.kind === 'text' || n.kind === 'attr') add(n.path, n.value);
+    return [...map.values()].map(f => Object.assign(f, { type: f.date / f.count >= 0.7 ? 'date' : f.num / f.count >= 0.7 ? 'number' : 'text' }));
+  }
+  /**
+   * JSON ya da XML'i alan kurallarına göre maskeler; yapı ve (XML'de) biçim aynen kalır.
+   * cfg: { rules:{ yol: {action,label,groups} }, propagate, auto, cats, manual, lang }
+   */
+  function maskStruct(text, kind, key, cfg) {
+    const lang = cfg.lang || 'tr', rules = cfg.rules || {};
+    const excluded = new Set(key.excluded);
+    const reserved = new Set([...String(text).matchAll(TOKEN_IN_TEXT)].map(m => m[1]));
+    const led = makeLedger(key, reserved);
+    const stats = { hidden: 0, spread: 0, auto: 0, scaled: 0, bucketed: 0, dated: 0, grouped: 0, dropped: [] };
+    const keyUpdates = { scaled: [], dated: [], sheetNames: {} };
+    const pool = new Map();
+    const addPool = (v, label) => { const t = normValue(v); if (canSpread(t) && !pool.has(clean(t))) pool.set(clean(t), { v: t, label }); };
+    const steps = {};
+    const fields = structFields(text, kind);
+    for (const f of fields) {
+      const r = rules[f.path]; if (!r) continue;
+      if (r.action === 'scale') keyUpdates.scaled.push(normHeader(f.name));
+      if (r.action === 'date') keyUpdates.dated.push(normHeader(f.name));
+      if (r.action === 'drop') stats.dropped.push(f.path);
+      if (r.action === 'bucket') steps[f.path] = 1;
+    }
+    if (Object.keys(steps).length) {
+      const mx = {};
+      const see = (p, v) => { if (steps[p]) { const n = parseNumber(typeof v === 'number' ? v : String(v), lang); if (n) mx[p] = Math.max(mx[p] || 0, Math.abs(n.n)); } };
+      if (kind === 'json') walkJSON(JSON.parse(text), see); else xmlScan(text, { attrs: true }).forEach(n => n.value !== undefined && see(n.path, n.value));
+      for (const p in steps) steps[p] = niceStep((mx[p] || 1) / 8);
+    }
+    /** Tek bir değeri kurala göre dönüştürür. Dönüş: yeni değer ya da null (değişmedi). */
+    function apply(path, v) {
+      const r = rules[path]; if (!r || v == null || v === '' || typeof v === 'boolean') return null;
+      const t = String(v).trim(), label = r.label || slug(lastSeg(path).replace(/^@/, '')) || 'ALAN';
+      const tag = () => { const e = led.get(label, t, 'V|' + clean(t)); if (excluded.has(e.key)) return null; stats.hidden++; addPool(t, label); return `[${e.token}]`; };
+      if (r.action === 'scale') { const p = parseNumber(typeof v === 'number' ? v : t, lang); if (p) { stats.scaled++; const x = formatNumber(p.n * key.factor, typeof v === 'number' ? p.decimals + 2 : p.decimals, typeof v === 'number' ? null : p.style); return typeof v === 'number' ? x : String(x); } }
+      else if (r.action === 'bucket') { const p = parseNumber(typeof v === 'number' ? v : t, lang); if (p) { stats.bucketed++; return bucketLabel(p.n, steps[path], lang); } }
+      else if (r.action === 'date') { const p = parseDate(t); if (p) { stats.dated++; return formatDate(addDays(p.d, key.dayShift), p.fmt) + (p.rest || ''); } }
+      else if (r.action === 'group') { const g = r.groups && r.groups[clean(t)]; if (g) { stats.grouped++; addPool(t, label); return g; } }
+      else if (r.action === 'drop') { addPool(t, label); return undefined; }
+      return tag();
+    }
+    for (const m of cfg.manual || []) if (String(m.term).trim()) pool.set(clean(m.term), { v: normValue(m.term), label: m.label || 'OZEL' });
+    if (cfg.propagate !== false) for (const e of Object.values(key.entries)) if (e.key.startsWith('V|') && !excluded.has(e.key) && !pool.has(clean(e.value))) pool.set(clean(e.value), { v: e.value, label: e.cat });
+    const autoOpts = { auto: true, cats: cfg.cats || DEFAULT_CATS, manual: [] };
+    let poolM = null;
+    const spread = (s) => {
+      if (typeof s !== 'string' || !s) return null;
+      let parts = [s], hit = false;
+      if (poolM) {
+        const o = []; let last = 0;
+        for (const m of poolM(s)) {
+          const pk = clean(m.text), p = pool.get(pk); if (!p) continue;
+          const e = led.get(p.label, m.text, 'V|' + pk); if (excluded.has(e.key)) continue;
+          if (m.index > last) o.push(s.slice(last, m.index));
+          o.push({ t: e.token, v: m.text }); last = m.index + m.text.length; stats.spread++; hit = true;
+        }
+        if (hit) { if (last < s.length) o.push(s.slice(last)); parts = o; }
+      }
+      if (cfg.auto) parts = parts.flatMap(p => { if (typeof p !== 'string' || !/\p{L}{3}|\d{7}/u.test(p)) return [p]; const a = analyzeString(p, key, led, autoOpts, false); const n = a.parts.filter(x => typeof x !== 'string').length; if (n) { hit = true; stats.auto += n; } return a.parts; });
+      return hit ? partsToText(parts) : null;
+    };
+    let out;
+    if (kind === 'json') {
+      const data = JSON.parse(text);
+      const indent = (text.match(/\n([ \t]+)"/) || [, '  '])[1];
+      const touched = new Set();
+      const pass1 = (v, path) => {
+        if (Array.isArray(v)) { const res = []; for (const x of v) { const y = pass1(x, path + '[]'); if (y !== undefined) res.push(y); } return res; }
+        if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) { const p = path ? path + '.' + k : k; const y = pass1(v[k], p); if (y !== undefined) o[k] = y; } return o; }
+        const x = apply(path, v); if (x === undefined) return undefined; if (x !== null) { touched.add(path); return { __s: x }; } return v;
+      };
+      const tmp = pass1(data, '');
+      poolM = makeMatcher([...pool.values()].map(p => p.v));
+      const pass2 = v => {
+        if (Array.isArray(v)) return v.map(pass2);
+        if (v && typeof v === 'object') {
+          if ('__s' in v && Object.keys(v).length === 1) return v.__s;
+          const o = {}; for (const k of Object.keys(v)) { const nk = (cfg.propagate !== false && spread(k)) || k; o[nk] = pass2(v[k]); } return o;
+        }
+        const y = spread(v); return y !== null ? y : v;
+      };
+      out = JSON.stringify(pass2(tmp), null, /\n/.test(text) ? indent : undefined);
+    } else {
+      const nodes = xmlScan(text, { attrs: true, elements: true });
+      const edits = [], dropRanges = [];
+      for (const n of nodes) {
+        if (n.kind === 'elem') { if (rules[n.path] && rules[n.path].action === 'drop') dropRanges.push([n.start, n.end]); continue; }
+        const x = apply(n.path, n.value);
+        if (x === undefined) { if (n.kind === 'attr') edits.push({ start: n.attrStart, end: n.attrEnd, text: '' }); continue; }
+        if (x !== null) { n.done = true; edits.push({ start: n.start, end: n.end, text: n.cdata ? String(x) : encodeXml(x, n.kind === 'attr') }); }
+      }
+      // metin düğümü yolu "a/b" iken öğe yolu da "a/b"dir: çıkar kuralı öğeyi tamamen siler
+      poolM = makeMatcher([...pool.values()].map(p => p.v));
+      for (const n of nodes) {
+        if (n.kind === 'elem' || n.done || (rules[n.path] && rules[n.path].action === 'drop')) continue;
+        const y = spread(n.value); if (y !== null) edits.push({ start: n.start, end: n.end, text: n.cdata ? y : encodeXml(y, n.kind === 'attr') });
+      }
+      const inDrop = e => dropRanges.some(([a, b]) => e.start >= a && e.end <= b);
+      out = xmlApply(text, edits.filter(e => !inDrop(e)).concat(dropRanges.map(([a, b]) => ({ start: a, end: b, text: '' }))));
+    }
+    return { masked: out, added: led.fresh, counts: led.counts, stats, keyUpdates, fields };
+  }
+  /** JSON ya da XML yanıtını geri açar; ölçeklenen/kaydırılan alanlar alan adıyla tanınır. */
+  function restoreStruct(text, kind, key, opts = {}) {
+    let done = 0; const unknown = new Set();
+    const one = (v, name) => { const r = restoreValue(v, key, opts, name); done += r.changed; (r.unknown || []).forEach(u => unknown.add(u)); return r.value; };
+    if (kind === 'json') {
+      let data; try { data = JSON.parse(text); } catch { const r = restoreText(text, key, { off: opts.off }); return { text: restoredToText(r.parts), done: r.done, unknown: r.unknown }; }
+      const walk = (v, name) => {
+        if (Array.isArray(v)) return v.map(x => walk(x, name));
+        if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[one(k, null)] = walk(v[k], k); return o; }
+        return (typeof v === 'string' || typeof v === 'number') ? one(v, name) : v;
+      };
+      const indent = (text.match(/\n([ \t]+)"/) || [, '  '])[1];
+      return { text: JSON.stringify(walk(data, null), null, /\n/.test(text) ? indent : undefined), done, unknown: [...unknown] };
+    }
+    const edits = [];
+    for (const n of xmlScan(text, { attrs: true })) {
+      const r = restoreValue(n.value, key, opts, lastSeg(n.path).replace(/^@/, ''));
+      (r.unknown || []).forEach(u => unknown.add(u));
+      if (r.changed) { done += r.changed; const v = r.value instanceof Date ? formatDate(r.value, null) : r.value; edits.push({ start: n.start, end: n.end, text: n.cdata ? String(v) : encodeXml(v, n.kind === 'attr') }); }
+    }
+    return { text: xmlApply(text, edits), done, unknown: [...unknown] };
   }
 
   return {
@@ -806,6 +1082,7 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
     restoreText, restoreValue, restoredToText,
     parseNumber, formatNumber, parseDate, formatDate, fmtLocal, addDays, niceStep, bucketLabel,
     makeProfile, applyProfile, profileScore, validProfile,
-    encryptKey, decryptKey, parseTable, makeSheet
+    encryptKey, decryptKey, parseTable, makeSheet,
+    maskTexts, xmlScan, xmlApply, decodeXml, encodeXml, redistribute, structFields, maskStruct, restoreStruct, walkJSON, decimalsOf: n => decimalsOf(n), roundest
   };
 });
