@@ -11,6 +11,9 @@
 
 ![Sırdaş: örnek tabloda Operasyon ve Sorumlu sütunları etiketlenmiş, maliyet ölçeklenmiş, tarihler kaydırılmış](docs/ekran/sirdas.png)
 
+
+**Projeyi anlatırken:** Mülakatta sorulabilecek 10 soru, kısa cevaplar ve verilen kararlar (sorun → karar → bedel): [docs/MULAKAT.md](docs/MULAKAT.md).
+
 ## Hangi biçimler?
 | Biçim | Nasıl seçilir | Çıktı |
 |---|---|---|
