@@ -1,3 +1,10 @@
 node_modules/
 dist/
 .DS_Store
+
+# Gizli bilgiler depoya girmesin
+.env
+.env.*
+!.env.example
+.dev.vars*
+*.pem

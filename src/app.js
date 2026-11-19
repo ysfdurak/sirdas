@@ -116,12 +116,19 @@
   async function needOfis() {
     if (!window.JSZip) await loadScript(ENV.jszipUrl || '/lib/jszip.min.js');
     if (!window.ExcelJS) await loadScript(ENV.exceljsUrl || '/lib/exceljs.min.js');
-    O.init({ ExcelJS: window.ExcelJS, JSZip: window.JSZip, pdfjsLib: window.pdfjsLib });
+    O.init({ ExcelJS: window.ExcelJS, JSZip: window.JSZip, ...(pdfLib ? { pdfjsLib: pdfLib } : {}) });
   }
+  /** pdf.js 4.10.38 (ES modülü). Sitede işçi ayrı iş parçacığında çalışır; claude.ai yapıtında işçi başka kökenden
+   *  geldiği için ana iş parçacığına alınır (window.pdfjsWorker). getDocument isEvalSupported:false ile çağrılır (ofis.js). */
+  let pdfLib = null;
   async function needPdf() {
-    if (!window.pdfjsWorker) await loadScript(ENV.pdfWorkerUrl || '/lib/pdf.worker.min.js');
-    if (!window.pdfjsLib) await loadScript(ENV.pdfUrl || '/lib/pdf.min.js');
-    O.init({ pdfjsLib: window.pdfjsLib });
+    if (!pdfLib) {
+      const workerUrl = new URL(ENV.pdfWorkerUrl || '/lib/pdf.worker.min.mjs', location.href).href;
+      if (ENV.artifact && !window.pdfjsWorker) window.pdfjsWorker = await import(workerUrl);
+      pdfLib = await import(new URL(ENV.pdfUrl || '/lib/pdf.min.mjs', location.href).href);
+      pdfLib.GlobalWorkerOptions.workerSrc = workerUrl;
+    }
+    O.init({ pdfjsLib: pdfLib });
   }
   const extOf = n => (String(n).toLowerCase().match(/\.([a-z0-9]+)$/) || [, ''])[1];
   async function copyText(text, btn, selectEl) {

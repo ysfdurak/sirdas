@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
 const S = require('../src/core.js'), O = require('../src/ofis.js'), XLSX = require('../lib/xlsx.full.min.js'), JSZip = require('jszip');
-O.init({ ExcelJS: require('exceljs'), JSZip, pdfjsLib: require('pdfjs-dist/legacy/build/pdf.js') });
+O.init({ ExcelJS: require('exceljs'), JSZip, pdfjsLib: await import('pdfjs-dist/legacy/build/pdf.mjs') });
 const ornek = f => readFileSync(path.join(import.meta.dirname, '..', 'test', 'ornek', f));
 const allText = async bytes => { const z = await JSZip.loadAsync(bytes); return (await Promise.all(Object.keys(z.files).filter(n => !z.files[n].dir && !/\.(png|jpe?g|emf|bin)$/.test(n)).map(n => z.file(n).async('string')))).join('\n'); };
 const terms = [{ term: 'Proje Atlas', label: 'OPERASYON' }, { term: 'Kuzey Hattı', label: 'OPERASYON' }];

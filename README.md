@@ -55,7 +55,7 @@ Aynı anahtar bütün biçimlerde geçerlidir: Excel'de `[OPERASYON_1]` olan de�
 
 ## Nasıl çalışıyor?
 - **Tek çekirdek:** Maskeleme mantığının tamamı `src/core.js` dosyasında, Office dosyaları `src/ofis.js` dosyasında. Web arayüzü (`src/app.js`), arka plan hesaplayıcısı (`src/worker.js`), Excel eklentisi (`eklenti/`), MCP sunucusu (`mcp/`) ve testler aynı dosyaları kullanır.
-- **Sunucu yok:** Hesaplar tarayıcıda yapılır. SheetJS 0.20.3, ExcelJS 4.4.0, JSZip 3.10.1, pdf.js 3.11.174 ve yazı tipleri depodaki `lib/` klasöründen gelir; ilk kullanımda yüklenir. Sayfanın güvenlik kuralı (CSP, `connect-src 'self'`) başka adrese bağlantıyı tarayıcı düzeyinde engeller.
+- **Sunucu yok:** Hesaplar tarayıcıda yapılır. SheetJS 0.20.3, ExcelJS 4.4.0, JSZip 3.10.1, pdf.js 4.10.38 ve yazı tipleri depodaki `lib/` klasöründen gelir; ilk kullanımda yüklenir. Sayfanın güvenlik kuralı (CSP, `connect-src 'self'`) başka adrese bağlantıyı tarayıcı düzeyinde engeller.
 - **Kayıt yok:** Tablolar, metinler ve anahtar yalnızca sayfanın belleğinde durur; sayfa kapanınca silinir. Tarayıcıda saklanan tek şey şablonların ve dil seçimin.
 - **Ayrıntı:** Geliştirici notları ve projeyi anlatabilmen için hazırlanmış rehber: [docs/GELISTIRME.md](docs/GELISTIRME.md).
 
