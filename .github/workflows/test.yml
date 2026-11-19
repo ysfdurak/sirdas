@@ -29,3 +29,10 @@ jobs:
           git diff --exit-code -- index.html en/index.html || (echo "index.html güncel değil: node tools/build.mjs çalıştırıp gönder." && exit 1)
       - name: Önbellek adı (sw.js) güncel mi
         run: node tools/sw-kontrol.mjs "${{ github.event.before || github.event.pull_request.base.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Playwright kur
+        run: pip install playwright==1.*
+      - name: Tarayıcı duman testi (Chrome)
+        run: python3 test/tarayici/duman_test.py "$(which google-chrome)"
