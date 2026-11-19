@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 export const S = require('../src/core.js');
 const XLSX = require('../lib/xlsx.full.min.js');
 export const O = require('../src/ofis.js');
-O.init({ ExcelJS: require('exceljs'), JSZip: require('jszip'), pdfjsLib: require('pdfjs-dist/legacy/build/pdf.js') });
+O.init({ ExcelJS: require('exceljs'), JSZip: require('jszip'), pdfjsLib: await import('pdfjs-dist/legacy/build/pdf.mjs') });
 
 const EXCEL = /\.(xlsx|xlsm|xls|ods)$/i, PRESERVE = /\.(xlsx|xlsm)$/i, TABLE = /\.(csv|tsv)$/i, TEXT = /\.(txt|md|log|html?)$/i;
 const OFFICE = /\.(docx|pptx)$/i, STRUCT = /\.(json|xml|geojson)$/i, PDF = /\.pdf$/i;
