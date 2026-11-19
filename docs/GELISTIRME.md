@@ -145,3 +145,9 @@ pdf.js sayfaların metnini çıkarır ve metin Metin görünümünde maskelenir.
 - **“Anahtar dosyası çalınırsa?”** Parola olmadan açılmaz: PBKDF2 ile 250.000 tur, ardından AES-GCM. Yine de dosya ile parolayı ayrı yerlerde tut.
 - **“MCP sürümünde yapay zekâ gerçek değeri görebilir mi?”** Sırdaş'ın araçları görmesine izin vermez; testi tam olarak bunu denetliyor. Ancak yapay zekânın başka bir dosya okuma aracı varsa geri açılmış dosyayı okuyabilir. Bu yüzden belgede çıktıyı izinli klasörün dışına yazdırma önerisi var.
 - **“KVKK açısından yeterli mi?”** Tek başına değil. Maskeleme riski azaltır, ama şirket politikası, aktarım kuralları ve veri sorumlusunun kararları geçerliliğini korur.
+
+
+## Örnekle ilk deneme ve gönderim özeti (Kasım 2026)
+- `renderGuide()` (src/app.js): örnek yüklüyken (`state.sample`) sayfanın başında üç adımlı kutu. "Karşılaştır" ilk 4 kaydı önce/sonra gösterir; hücre sınıfı `chg` (değişti), `same` (aynı kaldı), `chk` (serbest metin, ayrıca kontrol). "Kapat" tercihi `localStorage['sirdas_rehber']` içinde.
+- `sendGroups()` / `renderSendSum()`: 2. adımdaki üç grup. Serbest metin sütunu `isFree()`: seçilmemiş, sayı/tarih değil, ortalama uzunluğu 18 karakter ve üstü. Bu bir sezgidir; amacı kullanıcının gözünü o sütuna çevirmek.
+- Yeni metinler `src/i18n.js` içinde iki dilde (`guide*`, `cmp*`, `sum*`). Sonra `node tools/build.mjs`.

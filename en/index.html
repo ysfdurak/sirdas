@@ -229,6 +229,34 @@ footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: 
   .fact { border-right: 0; border-bottom: 1px solid var(--rule) }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+.guide { background: var(--sheet); border: 1px solid var(--rule); border-left: 4px solid var(--accent); padding: 14px 16px; margin: 0 0 22px; display: grid; gap: 10px }
+.guide .ghead { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between }
+.guide h2 { font-size: 18px; margin: 0 }
+.guide .gp { margin: 0; color: var(--muted) }
+.gsteps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px }
+.gsteps li { border: 1px solid var(--rule); padding: 10px 12px; display: grid; gap: 6px; align-content: start }
+.gsteps li span { font-size: 13px; color: var(--muted) }
+.gsteps .b { width: fit-content }
+.cmpbox { overflow-x: auto }
+.cmp { border-collapse: collapse; font-size: 13px; min-width: 640px; width: 100% }
+.cmp th, .cmp td { border: 1px solid var(--rule); padding: 5px 7px; text-align: left; vertical-align: top }
+.cmp th { font: 600 11px/1.2 var(--mono); letter-spacing: .04em; color: var(--muted); text-transform: uppercase }
+.cmp td .o { display: block; color: var(--muted); font-size: 12px }
+.cmp td .o::before { content: attr(data-l) ": "; font: 600 10px var(--mono); text-transform: uppercase }
+.cmp td .n { display: block; margin-top: 2px }
+.cmp td .n::before { content: attr(data-l) ": "; font: 600 10px var(--mono); text-transform: uppercase; color: var(--muted) }
+.cmp td.chg { background: var(--tint) }
+.cmp td.chk { box-shadow: inset 0 -3px 0 var(--warn) }
+.cmpleg { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; margin: 8px 0 0 }
+.cmpleg i { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--rule); vertical-align: -2px; margin-right: 5px }
+.cmpleg i.chg { background: var(--tint) } .cmpleg i.chk { box-shadow: inset 0 -3px 0 var(--warn) }
+.sendsum { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); border-top: 1px solid var(--rule) }
+.sendsum h3 { grid-column: 1 / -1; margin: 0; padding: 10px 14px 0; font: 600 11px/1.2 var(--mono); letter-spacing: .06em; color: var(--muted); text-transform: uppercase }
+.sendsum .grp { padding: 10px 14px 12px; border-right: 1px solid var(--rule); min-width: 0 }
+.sendsum .grp:last-child { border-right: 0 }
+.sendsum .grp b { display: block; font-size: 13px; margin-bottom: 4px }
+.sendsum .grp.chk b { color: var(--warn) }
+.sendsum ul { margin: 0; padding-left: 18px; font-size: 13px; display: grid; gap: 3px }
 </style>
 
 <div class="wrap">
@@ -243,6 +271,17 @@ footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: 
     <h1><button class="bigbar" id="demoBar" type="button" aria-pressed="false" data-ttl="demoTitle" title="Show or hide the masked value">[OPERASYON_1]</button> <span data-t="heroRest">never reaches the AI.</span></h1>
     <p class="lede" data-t="lede">Pick the column, row or cell you want to hide. Project names, customer codes, costs: the data does not have to be personal. Sırdaş tags what you pick, hides numbers and dates without breaking the maths, and can put everything back when the answer arrives.</p>
   </header>
+
+  <section class="guide" id="guide" data-tal="guideAria" aria-label="First try with the sample" hidden>
+    <div class="ghead"><h2 data-t="guideH">Try the sample: what exactly will the other side see?</h2><button type="button" class="b" id="guideClose" data-t="guideClose">Close</button></div>
+    <p class="gp" data-t="guideP">See it in three steps without uploading your own file. Nothing leaves this page.</p>
+    <ol class="gsteps">
+      <li><b data-t="guide1">1 · Mask</b><span id="guide1d"></span></li>
+      <li><b data-t="guide2">2 · Compare before and after</b><button type="button" class="b go" id="guideCmp" aria-expanded="false" aria-controls="cmpBox">Karşılaştır</button></li>
+      <li><b data-t="guide3">3 · Unmask the sample reply</b><button type="button" class="b" id="guideBack" data-t="guide3b">Go to the reply</button></li>
+    </ol>
+    <div class="cmpbox" id="cmpBox" hidden></div>
+  </section>
 
   <section aria-labelledby="h-mask">
     <div class="head"><span class="step" data-t="step1">STEP 1</span><h2 id="h-mask" data-t="h1">Choose what to hide</h2><span class="count" id="stats"></span></div>
@@ -339,6 +378,7 @@ footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: 
     <div class="checkbox">
       <div class="facts" id="facts"></div>
       <div class="checkbody" id="checkBody"></div>
+      <div class="sendsum" id="sendSum" hidden></div>
       <div class="sendbar">
         <button type="button" class="b go" id="copyOut" data-t="copy">Copy</button>
         <button type="button" class="b" id="saveXlsx" data-t="saveXlsx">Download Excel</button>

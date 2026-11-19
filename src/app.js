@@ -169,7 +169,7 @@
     else if (state.view === 'struct') renderStruct();
     else renderText();
     renderDocBanner();
-    renderStats(); renderSuggest(); renderCheck(); renderLedger(); renderBack();
+    renderStats(); renderSuggest(); renderCheck(); renderSendSum(); renderGuide(); renderLedger(); renderBack();
     $('sampleTag').hidden = !state.sample;
     $('catChips').hidden = !(state.view === 'text' ? state.textAuto : state.auto);
   }
@@ -454,6 +454,83 @@
       else if (r.suggestions.length) body.append(notice('', t('ck_textSug')));
       else body.append(notice('ok', t('ck_ok')));
     }
+  }
+
+  /* ---------------- Gönderim özeti ve ilk deneme ---------------- */
+  // Serbest metin sütunu: seçilmemiş, sayı/tarih değil, değerleri uzun. İçinde gizlenmemiş ad ya da kod geçebilir.
+  function isFree(sh, sc, c) {
+    if (sc.cols[c]) return false;
+    const p = colProfile(sh, sc, c); if (!p.n || p.num + p.date > 0.5) return false;
+    let len = 0, k = 0; for (let r = sc.hdr ? 1 : 0; r < sh.rows.length && k < 400; r++) { const v = String(sh.rows[r][c] || '').trim(); if (v) { len += v.length; k++; } }
+    return k > 0 && len / k >= 18;
+  }
+  function firstTag(so, c) { if (!so) return ''; for (const row of so.rows) { const v = row[c]; if (v && v.p) { const q = v.p.find(x => typeof x !== 'string' && x.t); if (q) return `[${q.t}]`; } } return ''; }
+  function sendGroups() {
+    const r = cur(), chg = [], same = [], chk = [];
+    if (!r || !state.book) return null;
+    state.book.sheets.forEach((sh, i) => {
+      const sc = state.sheetCfg[i]; if (!sc.include) return;
+      const so = r.sheets.find(x => x.index === i), pre = state.book.sheets.length > 1 ? sh.name + ' › ' : '';
+      for (let c = 0; c < sh.w; c++) {
+        const h = pre + headerOf(sh, sc, c), rule = sc.cols[c];
+        if (rule) chg.push(h + ': ' + t('sum_' + rule.action, { e: firstTag(so, c) || '[…]' }));
+        else if (isFree(sh, sc, c)) chk.push(t('sum_free', { h }));
+        else same.push(h);
+      }
+      if (sc.cells.size) chg.push(pre + t('sum_cells', { n: nf(sc.cells.size) }));
+    });
+    const s = r.stats;
+    if (s.spread) chg.push(t('sum_spread', { n: nf(s.spread) }));
+    if (r.leaks && r.leaks.total) chk.unshift(t('sum_leaks', { n: nf(r.leaks.total) }));
+    if (s.headersOpen && s.headersOpen.length) chk.push(t('sum_heads', { h: [...new Set(s.headersOpen)].slice(0, 8).join(', ') }));
+    return { chg, same, chk };
+  }
+  function renderSendSum() {
+    const box = $('sendSum'); box.textContent = '';
+    const g = state.view === 'table' && state.book && sendGroups();
+    box.hidden = !g || (!g.chg.length && !g.chk.length);
+    if (box.hidden) return;
+    const h = document.createElement('h3'); h.textContent = t('sumH'); box.append(h);
+    for (const [cls, title, list, empty] of [['chg', t('sumChg'), g.chg, '—'], ['same', t('sumSame'), g.same, t('sum_sameNone')], ['chk', t('sumChk'), g.chk, t('sum_chkNone')]]) {
+      const d = document.createElement('div'); d.className = 'grp ' + cls;
+      const b = document.createElement('b'); b.textContent = title + (list.length ? ' · ' + nf(list.length) : ''); d.append(b);
+      const ul = document.createElement('ul');
+      for (const x of (list.length ? list : [empty])) { const li = document.createElement('li'); li.textContent = x; ul.append(li); }
+      d.append(ul); box.append(d);
+    }
+  }
+  let guideOpen = false;
+  function renderGuide() {
+    const box = $('guide'), show = state.sample && state.view === 'table' && !!state.tres && store.get('sirdas_rehber') !== 'kapali';
+    box.hidden = !show; if (!show) return;
+    const sh = state.book.sheets[0], sc = state.sheetCfg[0];
+    $('guide1d').textContent = t('guide1d', { c: Object.keys(sc.cols).map(c => headerOf(sh, sc, +c) + ' (' + t('act_' + sc.cols[c].action).toLocaleLowerCase(LANG === 'en' ? 'en' : 'tr') + ')').join(', ') });
+    const btn = $('guideCmp'); btn.textContent = guideOpen ? t('guide2h') : t('guide2b'); btn.setAttribute('aria-expanded', guideOpen);
+    const cb = $('cmpBox'); cb.hidden = !guideOpen; cb.textContent = ''; if (!guideOpen) return;
+    const so = state.tres.sheets.find(x => x.index === 0), drop = new Set(so ? so.dropped : []), N = Math.min(4, sh.rows.length - 1);
+    const tb = document.createElement('table'); tb.className = 'cmp';
+    const hr = document.createElement('tr'); for (let c = 0; c < sh.w; c++) { const th = document.createElement('th'); th.textContent = headerOf(sh, sc, c); hr.append(th); }
+    const th0 = document.createElement('thead'); th0.append(hr); tb.append(th0);
+    const body = document.createElement('tbody');
+    for (let r = 1; r <= N; r++) {
+      const tr = document.createElement('tr');
+      for (let c = 0; c < sh.w; c++) {
+        const td = document.createElement('td'), v = so.rows[r][c], free = isFree(sh, sc, c);
+        const o = document.createElement('span'); o.className = 'o'; o.dataset.l = t('cmpBefore'); o.textContent = sh.rows[r][c];
+        const n = document.createElement('span'); n.className = 'n'; n.dataset.l = t('cmpAfter');
+        if (drop.has(c)) { n.textContent = '— ' + t('cmpDropped'); td.className = 'chg'; }
+        else if (v && v.p) { renderParts(n, v.p); td.className = 'chg'; }
+        else { n.textContent = disp(v); td.className = 'same'; }
+        if (free) td.className += ' chk';
+        td.append(o, n); tr.append(td);
+      }
+      body.append(tr);
+    }
+    tb.append(body); cb.append(tb);
+    const leg = document.createElement('p'); leg.className = 'cmpleg';
+    for (const [cls, k] of [['chg', 'cmpLegChg'], ['same', 'cmpLegSame'], ['chk', 'cmpLegChk']]) { const sp = document.createElement('span'), i = document.createElement('i'); i.className = cls; sp.append(i, t(k)); leg.append(sp); }
+    const note = document.createElement('span'); note.textContent = t('cmpNote', { n: nf(N) }); leg.append(note);
+    cb.append(leg);
   }
 
   /* ---------------- Anahtar defteri ---------------- */
@@ -858,6 +935,9 @@
   /* ---------------- Bağlantılar ---------------- */
   function wire() {
     wireGrid();
+    $('guideCmp').onclick = () => { guideOpen = !guideOpen; renderGuide(); };
+    $('guideBack').onclick = () => { const h = $('h-back'); h.scrollIntoView({ behavior: 'smooth', block: 'start' }); const rp = $('reply'); if (rp) setTimeout(() => rp.focus({ preventScroll: true }), 400); };
+    $('guideClose').onclick = () => { store.set('sirdas_rehber', 'kapali'); renderGuide(); };
     $('tabTable').onclick = () => setView('table');
     $('tabText').onclick = () => setView('text');
     $('tabStruct').onclick = () => setView('struct');

@@ -36,7 +36,8 @@ Aynı anahtar bütün biçimlerde geçerlidir: Excel'de `[OPERASYON_1]` olan de�
 - **Şablonlar:** Seçimini başlık adlarıyla kaydet; aynı başlıklı her yeni dosyada tek tıkla uygula. Sütunun yeri değişse de çalışır. Şablon `.json` dosyası olarak alınıp verilebilir ve MCP sunucusu da aynı dosyayı kullanır.
 - **Anahtar dosyası:** Etiketler, sayı katsayısı ve tarih kaydırması parolayla şifrelenip (PBKDF2-SHA256 250.000 tur + AES-GCM 256) dosyaya alınır. Ertesi gün yükleyince aynı değerler aynı etiketleri alır.
 - **Çok sayfalı Excel:** Her sayfa ayrı seçilir, hepsi tek dosyada maskelenir. Sayfa adları `Sayfa 1, 2…` olarak gizlenir ve geri açarken eski adlarına döner.
-- **Göndermeden kontrol:** Kaç değerin gizlendiğini ve hangi sütunların çıkarıldığını gösterir. Açık kalan gizli değerleri, etiket adından sızan değerleri, seçim yapılmamış sayfaları ve açık giden başlıkları da listeler.
+- **Örnekle ilk deneme:** İlk açılışta örnek dosya üzerinde üç adım: maskele → önce/sonra karşılaştır (değişen, aynı kalan ve ayrıca kontrol edilmesi gereken hücreler renkle ayrılır) → örnek yanıtı geri aç. Dışarı dosya göndermeden karşı tarafın ne göreceğini gösterir.
+- **Göndermeden kontrol:** İndirmeden önce özet üç gruba ayrılır: değiştirilenler, aynı bırakılanlar ve senin doğrulaman gerekenler (serbest metin sütunları, açık giden başlıklar, açık kalan gizli değerler). Kaç değerin gizlendiğini ve hangi sütunların çıkarıldığını gösterir. Açık kalan gizli değerleri, etiket adından sızan değerleri, seçim yapılmamış sayfaları ve açık giden başlıkları da listeler.
 - **Biçimi koruyan Excel çıktısı:** Renk, yazı tipi, sayı biçimi ve sütun genişliği kalır; değeri sızdırabilecek her şey temizlenir:
   - formüller değere çevrilir;
   - notlar, açılır listeler, koşullu biçim kuralları, tablo tanımları, görseller ve tanımlı adlar silinir;
