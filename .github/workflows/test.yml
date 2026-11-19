@@ -1,0 +1,31 @@
+# Her gönderimde: çekirdek, Office katmanı ve MCP testleri; derlenmiş sayfaların kaynakla aynı olduğu
+# ve önbellek adının (sw.js) güncellendiği denetlenir.
+name: Testler
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: MCP bağımlılıkları
+        run: cd mcp && npm ci --no-audit --no-fund
+      - name: Testler
+        run: npm test
+      - name: Derlenmiş sayfalar kaynakla aynı mı
+        run: |
+          node tools/build.mjs
+          git diff --exit-code -- index.html en/index.html || (echo "index.html güncel değil: node tools/build.mjs çalıştırıp gönder." && exit 1)
+      - name: Önbellek adı (sw.js) güncel mi
+        run: node tools/sw-kontrol.mjs "${{ github.event.before || github.event.pull_request.base.sha }}"
