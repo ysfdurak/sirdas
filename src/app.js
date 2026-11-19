@@ -498,10 +498,36 @@
     const h = document.createElement('h3'); h.textContent = t('imgH', { n: nf(im.total) }); box.append(h);
     const p = document.createElement('p'); p.textContent = t('imgLead'); box.append(p);
     const d = document.createElement('div'); d.className = 'grp chk';
+    d.tabIndex = 0; d.setAttribute('role', 'region'); d.setAttribute('aria-label', t('imgChk'));
     const b = document.createElement('b'); b.textContent = t('imgChk') + ' · ' + nf(im.places.length + (im.more ? 1 : 0)); d.append(b);
-    const ul = document.createElement('ul');
-    for (const x of imagePlaces(im)) { const li = document.createElement('li'); li.textContent = x; ul.append(li); }
+    const ul = document.createElement('ul'), texts = imagePlaces(im);
+    texts.forEach((x, i) => {
+      const li = document.createElement('li'), near = im.places[i] && im.places[i].near;
+      if (near) {
+        // Tıklayınca metinde o yere gider: görselin yanındaki ya da slaydın ilk metni seçilir.
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'linkish'; b.textContent = x;
+        b.title = t('imgGo'); b.onclick = () => goToText(near.replace(/^…|…$/g, ''));
+        li.append(b);
+      } else li.textContent = x;
+      ul.append(li);
+    });
     d.append(ul); box.append(d);
+  }
+  /** Metin kutusunda bir ifadeyi boşluk farklarına bakmadan bulup seçer ve görünür kılar. */
+  function goToText(needle) {
+    const ta = $('source'), hay = ta.value, norm = [], pos = [];
+    for (let i = 0; i < hay.length; i++) {
+      const sp = /\s/.test(hay[i]);
+      if (sp && norm[norm.length - 1] === ' ') continue;
+      norm.push(sp ? ' ' : hay[i]); pos.push(i);
+    }
+    const want = needle.replace(/\s+/g, ' ').trim(), at = norm.join('').indexOf(want);
+    if (at < 0 || !want) return;
+    const start = pos[at], end = pos[at + want.length - 1] + 1;
+    ta.focus(); ta.setSelectionRange(start, end);
+    // Seçimi görünür alana kaydır: satır sayısına göre yaklaşık konum.
+    const line = hay.slice(0, start).split('\n').length - 1, lh = parseFloat(getComputedStyle(ta).lineHeight) || 20;
+    ta.scrollTop = Math.max(0, line * lh - ta.clientHeight / 3);
   }
   function renderSendSum() {
     const box = $('sendSum'); box.textContent = '';
@@ -512,6 +538,8 @@
     const h = document.createElement('h3'); h.textContent = t('sumH'); box.append(h);
     for (const [cls, title, list, empty] of [['chg', t('sumChg'), g.chg, '—'], ['same', t('sumSame'), g.same, t('sum_sameNone')], ['chk', t('sumChk'), g.chk, t('sum_chkNone')]]) {
       const d = document.createElement('div'); d.className = 'grp ' + cls;
+      // Liste uzunsa kutu kaydırılır; klavyeyle de kaydırılabilsin diye odaklanabilir bölge.
+      d.tabIndex = 0; d.setAttribute('role', 'region'); d.setAttribute('aria-label', title);
       const b = document.createElement('b'); b.textContent = title + (list.length ? ' · ' + nf(list.length) : ''); d.append(b);
       const ul = document.createElement('ul');
       for (const x of (list.length ? list : [empty])) { const li = document.createElement('li'); li.textContent = x; ul.append(li); }

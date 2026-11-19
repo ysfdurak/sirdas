@@ -87,12 +87,12 @@ test('görsel yerleri: PowerPoint slaytı, Word paragrafı ve yanındaki metin, 
   const ppt = new JSZip();
   ppt.file('ppt/presentation.xml', '<p:presentation/>');
   ppt.file('ppt/slides/slide1.xml', '<p:sld><a:t>Kapak</a:t></p:sld>');
-  ppt.file('ppt/slides/slide2.xml', `<p:sld><a:t>Müşteri ekranı</a:t><p:pic>${blip}</p:pic><p:pic>${blip}</p:pic></p:sld>`);
+  ppt.file('ppt/slides/slide2.xml', `<p:sld><a:p><a:r><a:t>Müşteri ekranı</a:t></a:r></a:p><p:pic>${blip}</p:pic><p:pic>${blip}</p:pic></p:sld>`);
   ppt.file('ppt/slides/slide10.xml', `<p:sld><p:pic>${blip}</p:pic></p:sld>`);
   ppt.file('ppt/slideMasters/slideMaster1.xml', `<p:sldMaster>${blip}</p:sldMaster>`);
   const pi = await O.docInfo(await ppt.generateAsync({ type: 'uint8array' }));
   assert.equal(pi.images.total, 4);
-  assert.deepEqual(pi.images.places, [{ where: 'slide', n: 2, count: 2 }, { where: 'slide', n: 10, count: 1 }, { where: 'template', count: 1 }]);
+  assert.deepEqual(pi.images.places, [{ where: 'slide', n: 2, count: 2, near: 'Müşteri ekranı' }, { where: 'slide', n: 10, count: 1, near: '' }, { where: 'template', count: 1 }]);
 
   const doc = new JSZip();
   doc.file('word/document.xml', '<w:document><w:body>'

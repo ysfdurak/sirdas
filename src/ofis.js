@@ -168,15 +168,18 @@
    * üst/alt bilgi ve slayt şablonları ayrıca. Hiçbir şey değiştirmez.
    */
   const BLIP = /<a:blip\b[^>]*\br:(?:embed|link)=/g;
-  const plain = xml => S.decodeXml(xml.replace(/<w:tab\/>/g, ' ').replace(/<\/w:p>/g, ' ').replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+  const plain = xml => S.decodeXml(xml.replace(/<w:tab\/>/g, ' ').replace(/<\/(?:w|a):p>/g, ' ').replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
   async function imagesIn(zip, kind) {
     const places = [];
     const count = xml => (xml.match(BLIP) || []).length + (xml.match(/<v:imagedata\b/g) || []).length;
     const files = Object.keys(zip.files).filter(n => n.endsWith('.xml'));
     if (kind === 'pptx') {
       for (const n of files.filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => num(a) - num(b))) {
-        const c = count(await zip.file(n).async('string'));
-        if (c) places.push({ where: 'slide', n: num(n), count: c });
+        const x = await zip.file(n).async('string'), c = count(x);
+        if (!c) continue;
+        // Slaydın ilk metinli paragrafı: arayüz bu metni bulup slaydı gösterir.
+        const first = [...x.matchAll(/<a:p\b[\s\S]*?<\/a:p>/g)].map(m => plain(m[0])).find(Boolean) || '';
+        places.push({ where: 'slide', n: num(n), count: c, near: first.slice(0, 60) });
       }
       let tpl = 0;
       for (const n of files.filter(n => /^ppt\/(slideLayouts|slideMasters)\/[^/]+\.xml$/.test(n))) tpl += count(await zip.file(n).async('string'));
