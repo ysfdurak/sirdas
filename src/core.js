@@ -16,7 +16,7 @@
   else root.Sirdas = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  const VERSION = '1.2.1';
+  const VERSION = '1.2.2';
 
   /* ---------------- 1. Metin yardımcıları ---------------- */
   const tl = s => String(s).toLocaleLowerCase('tr');

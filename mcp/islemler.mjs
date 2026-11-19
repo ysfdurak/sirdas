@@ -18,9 +18,11 @@ function oku(file, enc) {
   if (size > max) throw new Error(`${path.basename(file)} okunmadı: dosya ${mb(size)}, bu tür için sınır ${mb(max)}. Yalnız gereken bölümü ayrı bir dosyaya kaydedip onu ver.`);
   return readFileSync(file, enc);
 }
-function zipOk(bytes, file) {
-  try { S.checkZip(bytes); } catch (e) {
-    throw new Error(`${path.basename(file)} okunmadı: açıldığında ${isFinite(e.total) ? mb(e.total) : '4 GB+'} (${e.entries} parça) tutuyor; sınır ${mb(S.LIMITS.inflated)}. Büyük resimleri veya gereksiz sayfaları silip yeniden kaydet.`);
+async function zipOk(bytes, file) {
+  // Önce zip dizinindeki beyan, sonra parçalar gerçekten açılarak sayılır (yanlış beyanlı dosya da durdurulur).
+  try { await O.checkInflate(bytes); } catch (e) {
+    if (e.code !== 'too_big_inflated') throw e;
+    throw new Error(`${path.basename(file)} okunmadı: açıldığında ${isFinite(e.total) ? mb(e.total) + (e.measured ? '+' : '') : '4 GB+'} tutuyor; sınır ${mb(S.LIMITS.inflated)}. Büyük resimleri veya gereksiz sayfaları silip yeniden kaydet.`);
   }
   return bytes;
 }
@@ -88,9 +90,9 @@ function sablonBul(cfg, ad) {
 }
 
 /* ---------- Dosya okuma / yazma ---------- */
-export function kitapOku(file) {
+export async function kitapOku(file) {
   if (EXCEL.test(file)) {
-    return O.bookFromSheetJS(XLSX, XLSX.read(zipOk(oku(file), file), { cellDates: true }), 'tr');
+    return O.bookFromSheetJS(XLSX, XLSX.read(await zipOk(oku(file), file), { cellDates: true }), 'tr');
   }
   if (TABLE.test(file)) return { sheets: [S.makeSheet(path.basename(file), S.parseTable(oku(file, 'utf8')) || [])] };
   throw new Error('Tablo olarak okunamıyor. Desteklenen: .xlsx .xlsm .xls .ods .csv .tsv');
@@ -104,10 +106,10 @@ function sutunKurallari(book, list, base) {
 }
 
 /* ---------- Araçlar ---------- */
-export function basliklar(cfg, dosya) {
+export async function basliklar(cfg, dosya) {
   const file = izinliYol(cfg, dosya);
   if (STRUCT.test(file)) return { alanlar: S.structFields(oku(file, 'utf8'), structKind(file)).map(f => ({ yol: f.path, adet: f.count, tur: { text: 'metin', number: 'sayı', date: 'tarih' }[f.type] })) };
-  const book = kitapOku(file);
+  const book = await kitapOku(file);
   return { sayfalar: book.sheets.map((sh, i) => ({
     sayfa: i + 1, gizli: sh.hidden || undefined, satir: sh.rows.length - 1,
     sutunlar: (sh.rows[0] || []).map((h, c) => {
@@ -148,7 +150,7 @@ export async function maskeleDosya(cfg, a) {
       writeFileSync(out, r.masked);
       return { cikti: out, not: 'PDF’in görünümü korunmaz; maskeli metin .txt olarak yazıldı.', ozet: { sayfa: pt.pages, gizlenen: r.parts.filter(p => typeof p !== 'string').length }, onizleme: r.masked.slice(0, 60000) };
     }
-    const r = await O.docMask(zipOk(new Uint8Array(oku(file)), file), key, { auto: a.kisisel_veri !== false, manual: terms, lang: cfg.lang });
+    const r = await O.docMask(await zipOk(new Uint8Array(oku(file)), file), key, { auto: a.kisisel_veri !== false, manual: terms, lang: cfg.lang });
     S.commit(key, r.result); await anahtarKaydet(cfg, key);
     const out = a.cikti ? izinliYol(cfg, a.cikti) : ciktiYolu(file, 'maskeli');
     writeFileSync(out, r.bytes);
@@ -163,7 +165,7 @@ export async function maskeleDosya(cfg, a) {
     writeFileSync(out, r.masked);
     return { cikti: out, ozet: { gizlenen: r.parts.filter(p => typeof p !== 'string').length, supheli: r.suggestions.length }, onizleme: r.masked.slice(0, 60000) };
   }
-  const book = kitapOku(file);
+  const book = await kitapOku(file);
   let applied = { cfg: Object.assign({ sheets: book.sheets.map(sh => ({ hdr: true, include: !sh.hidden, cols: {}, cells: [], holes: [] })) }, base), matched: [], missing: [] };
   const prof = sablonBul(cfg, a.sablon);
   if (prof) applied = S.applyProfile(book, prof, applied.cfg);
@@ -181,7 +183,7 @@ export async function maskeleDosya(cfg, a) {
   if (TABLE.test(out)) writeFileSync(out, S.toTSV(res.sheets.find(s => s.include), cfg.lang).replace(/\t/g, out.endsWith('.tsv') ? '\t' : ';'));
   else if (PRESERVE.test(file) && a.bicimi_koru !== false) {
     const full = { ...res };
-    const x = await O.excelMaskPreserve(zipOk(new Uint8Array(oku(file)), file), book, full, { hideSheetNames: applied.cfg.hideSheetNames });
+    const x = await O.excelMaskPreserve(await zipOk(new Uint8Array(oku(file)), file), book, full, { hideSheetNames: applied.cfg.hideSheetNames });
     writeFileSync(out, x.bytes); res.temizlenen = x.report;
   } else {
     const wb = XLSX.utils.book_new(); const dnf = cfg.lang === 'en' ? 'yyyy-mm-dd' : 'dd\\.mm\\.yyyy';
@@ -215,11 +217,11 @@ export async function geriAcDosya(cfg, a) {
   const out = a.cikti ? izinliYol(cfg, a.cikti) : ciktiYolu(file, 'acilmis');
   let done = 0; const unknown = new Set();
   if (PRESERVE.test(file)) {
-    const r = await O.excelRestore(zipOk(new Uint8Array(oku(file)), file), key, opts);
+    const r = await O.excelRestore(await zipOk(new Uint8Array(oku(file)), file), key, opts);
     writeFileSync(out, r.bytes); return { cikti: out, geri_acilan: r.done, bilinmeyen_etiketler: r.unknown };
   }
   if (OFFICE.test(file)) {
-    const r = await O.docRestore(zipOk(new Uint8Array(oku(file)), file), key, { ...opts, numbers: a.sayilar === true });
+    const r = await O.docRestore(await zipOk(new Uint8Array(oku(file)), file), key, { ...opts, numbers: a.sayilar === true });
     writeFileSync(out, r.bytes); return { cikti: out, geri_acilan: r.done, bilinmeyen_etiketler: r.unknown };
   }
   if (STRUCT.test(file)) {

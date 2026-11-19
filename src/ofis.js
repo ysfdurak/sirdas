@@ -25,9 +25,36 @@
    * Notları (yorumları) ExcelJS'e vermeden önce dosyadan söker: hem değer sızdırırlar hem de bazı programların
    * ürettiği not biçimleri ExcelJS'te okunamaz. Dönüş: { bytes, notes }
    */
-  async function stripNotes(bytes) {
-    S.checkZip(bytes);
+  /**
+   * Office/Excel dosyasını gerçekten açarak içerik boyutunu sayar ve sınırı aşınca durur.
+   * Zip dizinindeki boyut dosyanın kendi beyanıdır; yanlış beyanlı bir dosya S.checkZip'i geçebilir. Burada
+   * her parça akışla açılır, açılan bayt sayılır; sınır geçilince akış durdurulur, bellek şişmeden hata verilir.
+   * Dönüş: yüklenmiş JSZip nesnesi (tekrar yüklemeye gerek yok).
+   */
+  async function checkInflate(bytes, limits = S.LIMITS) {
+    if (!S.checkZip(bytes, limits)) return null; // zip değil (ör. eski .xls): ölçülecek parça yok
     const zip = await need('JSZip').loadAsync(bytes);
+    const files = Object.values(zip.files).filter(f => !f.dir);
+    let total = 0;
+    for (const f of files) {
+      await new Promise((ok, no) => {
+        const st = f.internalStream('uint8array');
+        let stopped = false;
+        st.on('data', d => {
+          if (stopped) return;
+          total += d.length;
+          if (total > limits.inflated) {
+            stopped = true;
+            st.pause();
+            no(S.limitError('too_big_inflated', { total, entries: files.length, measured: true }));
+          }
+        }).on('error', e => { if (!stopped) no(e); }).on('end', () => { if (!stopped) ok(); }).resume();
+      });
+    }
+    return zip;
+  }
+  async function stripNotes(bytes) {
+    const zip = await checkInflate(bytes);
     let notes = 0;
     for (const n of Object.keys(zip.files)) {
       if (/^xl\/(comments[^/]*\.xml|comments\/.*|threadedComments\/.*|persons\/.*|drawings\/vmlDrawing[^/]*\.vml)$/.test(n)) {
@@ -102,7 +129,7 @@
   async function excelRestore(bytes, key, opts = {}) {
     const ExcelJS = need('ExcelJS');
     const wb = new ExcelJS.Workbook();
-    S.checkZip(bytes);
+    await checkInflate(bytes);
     try { await wb.xlsx.load(bytes); } catch { await wb.xlsx.load((await stripNotes(bytes)).bytes); }
     let done = 0; const unknown = new Set();
     const FORMULA = ExcelJS.ValueType.Formula;
@@ -139,9 +166,7 @@
     return { main, rest };
   }
   async function loadParts(bytes) {
-    const JSZip = need('JSZip');
-    S.checkZip(bytes);
-    const zip = await JSZip.loadAsync(bytes);
+    const zip = await checkInflate(bytes);
     const kind = kindOf(zip); if (!kind) throw new Error('not_office');
     const { main, rest } = textParts(zip, kind);
     const parts = [];
@@ -339,5 +364,5 @@
     return { sheets };
   }
 
-  return { init, bookFromSheetJS, stripNotes, excelMaskPreserve, excelRestore, docInfo, docMask, docRestore, pdfText };
+  return { init, checkInflate, bookFromSheetJS, stripNotes, excelMaskPreserve, excelRestore, docInfo, docMask, docRestore, pdfText };
 });

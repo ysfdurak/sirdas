@@ -690,9 +690,9 @@
     st.textContent = t('reading', { f: name });
     try {
       if (['xlsx', 'xlsm', 'xls', 'ods'].includes(ext)) {
-        await needXlsx();
+        await needXlsx(); await needOfis();
         const bytes = new Uint8Array(await file.arrayBuffer());
-        S.checkZip(bytes);
+        await O.checkInflate(bytes); // açılan gerçek boyut sınırı (beyana güvenmez)
         const wb = XLSX.read(bytes, { type: 'array', cellDates: true });
         const list = O.bookFromSheetJS(XLSX, wb, LANG).sheets;
         if (!list.length) throw new Error('empty');
@@ -874,8 +874,9 @@
     try {
       await needXlsx();
       const k = eff(), opts = { off: [...state.backOff], numbers: state.backNum, dates: state.backDate, lang: LANG };
+      await needOfis();
       const raw = new Uint8Array(await f.arrayBuffer());
-      S.checkZip(raw);
+      await O.checkInflate(raw);
       const wb = XLSX.read(raw, { type: 'array', cellDates: true, cellNF: true });
       let done = 0; const unknown = new Set();
       for (const n of wb.SheetNames) {

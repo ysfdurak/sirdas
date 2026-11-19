@@ -114,3 +114,25 @@ test('görsel yerleri: PowerPoint slaytı, Word paragrafı ve yanındaki metin, 
   assert.equal(after.images.total, 2);
   assert.ok(!after.text.includes('Kuzey Lojistik'));
 });
+
+// Dış inceleme (G3 devamı): zip dizinindeki boyut beyanına güvenilmez; parçalar açılırken gerçek bayt sayılır.
+test('yanlış beyanlı zip: dizin küçük der, açılan veri büyük; açılırken durdurulur', async () => {
+  const z = new JSZip(); z.file('[Content_Types].xml', '<Types/>'); z.file('word/document.xml', new Uint8Array(300 * 1024 * 1024));
+  const bytes = await z.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  // Yerel başlıklarda ve merkezi dizinde açılmış boyutu 1000 bayt diye yaz.
+  for (let o = 0; o + 46 <= bytes.length; o++) {
+    const sig = dv.getUint32(o, true);
+    if (sig === 0x04034b50 && dv.getUint32(o + 22, true) > 1000) dv.setUint32(o + 22, 1000, true);
+    if (sig === 0x02014b50 && dv.getUint32(o + 24, true) > 1000) dv.setUint32(o + 24, 1000, true);
+  }
+  assert.ok(S.zipInflated(bytes).total < 5000, 'dizin küçük beyan ediyor');
+  S.checkZip(bytes); // beyana bakan ön kontrol geçer
+  const t0 = Date.now();
+  await assert.rejects(O.checkInflate(bytes), e => e.code === 'too_big_inflated' && e.measured && e.total > S.LIMITS.inflated);
+  assert.ok(Date.now() - t0 < 20000, 'makul sürede durur');
+  await assert.rejects(O.docInfo(bytes), e => e.code === 'too_big_inflated');
+  await assert.rejects(O.excelRestore(bytes, S.newKey()), e => e.code === 'too_big_inflated');
+  assert.ok(await O.checkInflate(new Uint8Array(ornek('rapor.docx'))), 'normal dosya geçer');
+  assert.equal(await O.checkInflate(new TextEncoder().encode('zip değil')), null);
+});
