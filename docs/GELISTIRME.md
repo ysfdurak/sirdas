@@ -130,7 +130,7 @@ pdf.js sayfaların metnini çıkarır ve metin Metin görünümünde maskelenir.
 - **Gerçekçi sahte değer (ör. `Selin Aksoy` yerine `Ayla Kurt`):** Yapay zekâ sahte değeri gerçek sanıp yanıtta geri açılması zor hale getirebilir. Köşeli parantezli etiket her zaman geri bulunur.
 - **Formül aktarmak:** Formül, gizli bir hücreye başvurarak değeri sızdırabilir. Yalnızca değerler aktarılır.
 - **Maskeli PDF:** PDF'te metin, konumu ve yazı tipiyle çizilir. Değiştirmek için sayfayı yeniden kurmak gerekir; metin çıkarmak yeterince işe yarıyor.
-- **Görsellerin içindeki yazı:** Metin tanıma (OCR) gerekirdi. Excel'de görseller silinir; Word ve PowerPoint'te bırakılır ve rapor kaç görsel olduğunu söyler.
+- **Görsellerin içindeki yazı:** Metin tanıma (OCR) gerekirdi. Excel'de görseller silinir; Word ve PowerPoint'te bırakılır. Belge açılınca gönderim özeti görsellerin yerini listeler (`ofis.js › imagesIn`, `app.js › renderDocImages`).
 
 ## 7. Sorulabilecek sorular
 - **“Word'de bir kelime yarısı kalın yazılmışsa ne olur?”** Paragrafın parçaları birleştirilip maskelenir, etiket ilk parçaya yazılır, diğer parçalardaki harfler silinir. Biçim kalır, değer bölünmüş haliyle de sızmaz.
@@ -151,3 +151,10 @@ pdf.js sayfaların metnini çıkarır ve metin Metin görünümünde maskelenir.
 - `renderGuide()` (src/app.js): örnek yüklüyken (`state.sample`) sayfanın başında üç adımlı kutu. "Karşılaştır" ilk 4 kaydı önce/sonra gösterir; hücre sınıfı `chg` (değişti), `same` (aynı kaldı), `chk` (serbest metin, ayrıca kontrol). "Kapat" tercihi `localStorage['sirdas_rehber']` içinde.
 - `sendGroups()` / `renderSendSum()`: 2. adımdaki üç grup. Serbest metin sütunu `isFree()`: seçilmemiş, sayı/tarih değil, ortalama uzunluğu 18 karakter ve üstü. Bu bir sezgidir; amacı kullanıcının gözünü o sütuna çevirmek.
 - Yeni metinler `src/i18n.js` içinde iki dilde (`guide*`, `cmp*`, `sum*`). Sonra `node tools/build.mjs`.
+
+
+## Dosya sınırları ve görsel listesi (Kasım 2026, 1.2.0)
+- **Neden:** Dosya seçme ve sürükle-bırak aynı `readFile`'a gidiyordu; Excel/Office dosyası tümüyle belleğe alınıyor, PDF'te bütün sayfalar dolaşılıyordu. Büyük ya da "zip bombası" gibi şişen bir dosya, özellikle telefonda sekmeyi kilitleyip o anki çalışmayı kaybettirebilirdi.
+- **Sınırlar** (`core.js › LIMITS`): dosya boyutu türe göre (`fileLimit`: tablo 30 MB, Word/PowerPoint 40 MB, PDF 60 MB, metin 20 MB) dosya okunmadan önce; Office/Excel'de açılmış toplam içerik 250 MB ve 10.000 parça, zip'in merkezi dizininden hiçbir parça açılmadan (`zipInflated`, `checkZip`); PDF'te 500 sayfa, sayfalar dolaşılmadan (`pdfText(bytes, { maxPages })`). Hatalar kodludur (`too_big_inflated`, `too_many_pages`); `app.js › limitText` Türkçe/İngilizce açıklamaya çevirir. Sınır aşılırsa ekrandaki tablo veya metin değişmez. MCP (`mcp/islemler.mjs › oku, zipOk`) aynı sınırları uygular.
+- **Görsel listesi** (`ofis.js › imagesIn`): `docInfo` ve böylece belge açılışı, görsellerin yerini döndürür: PowerPoint'te slayt numarası, Word'de paragraf sırası ve hemen önceki metin, üst/alt bilgi, slayt şablonu. Grafik (`c:chart`) resim sayılmaz. Arayüz bunu gönderim özetinde "Bakılacak yerler" olarak gösterir, indirmeden önce.
+- **Testler** (`mcp/ofis.test.mjs`): 300 MB'lık sıkışmış bir zip bombası açılmadan reddedilir; PDF sayfa sınırı; görsel yerleri (slayt, paragraf ve yanındaki metin, üst bilgi, şablon) ve maskelemeden sonra görselin değişmeden durduğu.

@@ -58,3 +58,59 @@ test('PDF metni sayfa sayfa çıkarılır', async () => {
   assert.equal(r.pages, 2);
   assert.match(r.text, /^Proje Atlas raporu: Selin Aksoy \(T\.C\. 10000000146\)\nToplam 412\.000 TL/);
 });
+
+// G3 · Dosya boyutu ve bellek: zip içeriği açılmadan ölçülür, PDF'te sayfa sınırı sayfalar dolaşılmadan uygulanır.
+test('dosya sınırları: zip açılmadan ölçülür, sınırı aşan dosya kodlu hatayla reddedilir', async () => {
+  const docx = new Uint8Array(ornek('rapor.docx'));
+  const z = S.zipInflated(docx);
+  assert.ok(z.entries > 3 && z.total > docx.length, 'açılmış boyut ve parça sayısı okunur');
+  assert.equal(S.zipInflated(new TextEncoder().encode('düz metin')), null, 'zip olmayan dosya');
+  const small = { ...S.LIMITS, inflated: 1000 };
+  assert.throws(() => S.checkZip(docx, small), e => e.code === 'too_big_inflated' && e.total === z.total);
+  // Gerçek bir "zip bombası": 300 MB sıfır ~300 KB'a sıkışır; sınır parçaları açmadan yakalar.
+  const bomb = new JSZip(); bomb.file('[Content_Types].xml', '<Types/>'); bomb.file('xl/worksheets/sheet1.xml', new Uint8Array(300 * 1024 * 1024));
+  const bombBytes = await bomb.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+  assert.ok(bombBytes.length < 2 * 1024 * 1024);
+  assert.throws(() => S.checkZip(bombBytes), e => e.code === 'too_big_inflated');
+  await assert.rejects(O.excelRestore(bombBytes, S.newKey()), e => e.code === 'too_big_inflated');
+  await assert.rejects(O.docInfo(bombBytes), e => e.code === 'too_big_inflated');
+  await assert.rejects(O.pdfText(new Uint8Array(ornek('belge.pdf')), { maxPages: 0 }), e => e.code === 'too_many_pages' && e.pages >= 1);
+  assert.equal(S.fileLimit('xlsx'), S.LIMITS.file.sheet);
+  assert.equal(S.fileLimit('pptx'), S.LIMITS.file.office);
+  assert.equal(S.fileLimit('pdf'), S.LIMITS.file.pdf);
+  assert.equal(S.fileLimit('csv'), S.LIMITS.file.text);
+});
+
+// G4 · Görseller maskelenmez: kullanıcı kendi dosyasında hangi slayta, paragrafa bakacağını görür.
+test('görsel yerleri: PowerPoint slaytı, Word paragrafı ve yanındaki metin, üst bilgi, şablon', async () => {
+  const blip = '<a:blip r:embed="rId9"/>';
+  const ppt = new JSZip();
+  ppt.file('ppt/presentation.xml', '<p:presentation/>');
+  ppt.file('ppt/slides/slide1.xml', '<p:sld><a:t>Kapak</a:t></p:sld>');
+  ppt.file('ppt/slides/slide2.xml', `<p:sld><a:t>Müşteri ekranı</a:t><p:pic>${blip}</p:pic><p:pic>${blip}</p:pic></p:sld>`);
+  ppt.file('ppt/slides/slide10.xml', `<p:sld><p:pic>${blip}</p:pic></p:sld>`);
+  ppt.file('ppt/slideMasters/slideMaster1.xml', `<p:sldMaster>${blip}</p:sldMaster>`);
+  const pi = await O.docInfo(await ppt.generateAsync({ type: 'uint8array' }));
+  assert.equal(pi.images.total, 4);
+  assert.deepEqual(pi.images.places, [{ where: 'slide', n: 2, count: 2 }, { where: 'slide', n: 10, count: 1 }, { where: 'template', count: 1 }]);
+
+  const doc = new JSZip();
+  doc.file('word/document.xml', '<w:document><w:body>'
+    + '<w:p><w:r><w:t>Giriş</w:t></w:r></w:p>'
+    + '<w:p><w:r><w:t>Aşağıda Kuzey Lojistik sipariş ekranı var:</w:t></w:r></w:p>'
+    + `<w:p><w:r><w:drawing><wp:inline>${blip}</wp:inline></w:drawing></w:r></w:p>`
+    + '<w:p><w:r><w:drawing><c:chart r:id="rId3"/></w:drawing></w:r></w:p>'
+    + '</w:body></w:document>');
+  doc.file('word/header1.xml', `<w:hdr><w:drawing>${blip}</w:drawing></w:hdr>`);
+  const di = await O.docInfo(await doc.generateAsync({ type: 'uint8array' }));
+  assert.equal(di.images.total, 2, 'grafik resim sayılmaz');
+  assert.equal(di.images.places[0].where, 'para');
+  assert.equal(di.images.places[0].n, 3);
+  assert.match(di.images.places[0].near, /sipariş ekranı var:$/);
+  assert.deepEqual(di.images.places[1], { where: 'header', count: 1 });
+  // Maskeleme görseli değiştirmez: aynı yer ve sayı maskeli dosyada da durur.
+  const out = await O.docMask(await doc.generateAsync({ type: 'uint8array' }), S.newKey(), { manual: [{ term: 'Kuzey Lojistik', label: 'FIRMA' }] });
+  const after = await O.docInfo(out.bytes);
+  assert.equal(after.images.total, 2);
+  assert.ok(!after.text.includes('Kuzey Lojistik'));
+});

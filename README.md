@@ -64,13 +64,14 @@ Aynı anahtar bütün biçimlerde geçerlidir: Excel'de `[OPERASYON_1]` olan de�
 - **Seçmediğin hücreler olduğu gibi gider.** Bağlam da ele verebilir: ad gizlense de bölge, tarih ve tutar birlikte bir operasyonu tanıtabilir.
 - **Ölçekleme şifreleme değildir.** Oranlar korunduğu için tek bir gerçek değeri bilen biri katsayıyı bulabilir. Rakamın kendisi hassassa aralığa çevir ya da sütunu çıkar.
 - **Bu, takma adlandırmadır.** Anahtar var oldukça veri geri çevrilebilir, yani anonim sayılmaz. Kurum verisinde şirket kuralların ve KVKK yükümlülüklerin geçerliliğini korur.
-- **Görsellerin içindeki yazılar gizlenmez.** Word, PowerPoint ve Excel'deki resimler değiştirilmez (Excel'de görseller silinir).
+- **Görsellerin içindeki yazılar gizlenmez.** Word ve PowerPoint'teki resimler değiştirilmez (Excel'de görseller silinir). Belgeyi açınca Sırdaş görsellerin yerini listeler (Slayt 3, 12. paragraf ve yanındaki metin, üst bilgi, slayt şablonu); indirmeden önce kendi dosyanda bu yerlere bak.
+- **Dosya sınırları.** Excel ve tablo 30 MB, Word ve PowerPoint 40 MB, PDF 60 MB ve 500 sayfa, düz metin 20 MB. Office/Excel dosyası açıldığında toplam içerik 250 MB ve 10.000 parçayı geçemez; bu, dosya açılmadan zip dizininden ölçülür. Sınırı aşan dosya açıklamayla reddedilir, ekrandaki çalışma değişmez. MCP aynı sınırları uygular.
 - **Metin olarak ölçeklenen sayılar yuvarlanabilir.** Excel ve JSON'daki sayı hücreleri iki ondalık fazla saklandığı için tam döner; metin içinde yazılmış sayılarda (`412.000`) geri çevrilen değer ±1 sapabilir.
 
 ## Geliştirme
 ```bash
 npm run build     # web/source.html + src/*.js → index.html, en/index.html, dist/artifact.html
-npm test          # çekirdek (23), ofis (4) ve MCP uçtan uca testleri (önce: cd mcp && npm install)
+npm test          # çekirdek (23), ofis (6) ve MCP uçtan uca testleri (önce: cd mcp && npm install)
 npm run serve     # http://localhost:8000/
 ```
 

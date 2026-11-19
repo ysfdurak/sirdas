@@ -485,8 +485,27 @@
     if (s.headersOpen && s.headersOpen.length) chk.push(t('sum_heads', { h: [...new Set(s.headersOpen)].slice(0, 8).join(', ') }));
     return { chg, same, chk };
   }
+  /** Word/PowerPoint: görseller maskelenmez; kullanıcı kendi dosyasında hangi slayta, paragrafa bakacağını görür. */
+  function imagePlaces(im) {
+    const out = im.places.map(p => p.where === 'slide' ? t('img_slide', { n: p.n, c: nf(p.count) })
+      : p.where === 'para' ? t('img_para', { n: nf(p.n), c: nf(p.count) }) + (p.near ? ' · “' + p.near + '”' : '')
+      : t('img_' + p.where, { c: nf(p.count) }));
+    if (im.more) out.push(t('img_more', { n: nf(im.more) }));
+    return out;
+  }
+  function renderDocImages(box) {
+    const im = state.doc.images;
+    const h = document.createElement('h3'); h.textContent = t('imgH', { n: nf(im.total) }); box.append(h);
+    const p = document.createElement('p'); p.textContent = t('imgLead'); box.append(p);
+    const d = document.createElement('div'); d.className = 'grp chk';
+    const b = document.createElement('b'); b.textContent = t('imgChk') + ' · ' + nf(im.places.length + (im.more ? 1 : 0)); d.append(b);
+    const ul = document.createElement('ul');
+    for (const x of imagePlaces(im)) { const li = document.createElement('li'); li.textContent = x; ul.append(li); }
+    d.append(ul); box.append(d);
+  }
   function renderSendSum() {
     const box = $('sendSum'); box.textContent = '';
+    if (state.doc && state.view === 'text' && state.doc.images?.total) { box.hidden = false; renderDocImages(box); return; }
     const g = state.view === 'table' && state.book && sendGroups();
     box.hidden = !g || (!g.chg.length && !g.chk.length);
     if (box.hidden) return;
@@ -622,13 +641,30 @@
     const s = S.suggestColumns(sh.rows[0], state.cats);
     for (const c in s) if (!sc.cols[c]) sc.cols[c] = { action: 'tag', label: s[c] };
   }
+  /* Dosya sınırları (core.js › LIMITS): okumadan önce boyut, açmadan önce zip içeriği, PDF'te sayfa sayısı.
+     Sınırı aşan dosya açıklamayla reddedilir; ekrandaki çalışma değişmez. */
+  const mbText = b => (b / 1048576).toLocaleString(LANG === 'en' ? 'en-GB' : 'tr-TR', { maximumFractionDigits: b < 10485760 ? 1 : 0 }) + ' MB';
+  function sizeOk(file, st) {
+    const max = S.fileLimit(extOf(file.name));
+    if (file.size <= max) return true;
+    st.textContent = t('tooBig', { f: file.name, s: mbText(file.size), m: mbText(max) });
+    return false;
+  }
+  function limitText(e, name) {
+    if (e?.code === 'too_big_inflated')
+      return t('tooBigInflated', { f: name, s: isFinite(e.total) ? mbText(e.total) : '4 GB+', m: mbText(S.LIMITS.inflated), n: nf(e.entries || 0), k: nf(S.LIMITS.entries) });
+    if (e?.code === 'too_many_pages') return t('tooManyPages', { f: name, n: nf(e.pages), m: nf(e.max) });
+    return null;
+  }
   async function readFile(file) {
     const name = file.name, ext = extOf(name), st = $('fileStatus');
+    if (!sizeOk(file, st)) return;
     st.textContent = t('reading', { f: name });
     try {
       if (['xlsx', 'xlsm', 'xls', 'ods'].includes(ext)) {
         await needXlsx();
         const bytes = new Uint8Array(await file.arrayBuffer());
+        S.checkZip(bytes);
         const wb = XLSX.read(bytes, { type: 'array', cellDates: true });
         const list = O.bookFromSheetJS(XLSX, wb, LANG).sheets;
         if (!list.length) throw new Error('empty');
@@ -642,7 +678,7 @@
         st.textContent = t('loadingLib'); await needOfis();
         const bytes = new Uint8Array(await file.arrayBuffer());
         const info = await O.docInfo(bytes);
-        state.sample = false; state.doc = { bytes, kind: info.kind, name };
+        state.sample = false; state.doc = { bytes, kind: info.kind, name, images: info.images };
         $('source').value = info.text; $('source').readOnly = true; st.textContent = '';
         setView('text', true); refresh();
       } else if (ext === 'pdf') {
@@ -658,7 +694,7 @@
         closeDoc(true); state.sample = false; $('source').value = text; st.textContent = '';
         setView('text', true); refresh();
       }
-    } catch (e) { st.textContent = /missing_lib|load/.test(e && e.message) ? t('libFail') : t('readFail', { f: name }); }
+    } catch (e) { st.textContent = limitText(e, name) || (/missing_lib|load/.test(e && e.message) ? t('libFail') : t('readFail', { f: name })); }
   }
   function closeDoc(silent) {
     if (!state.doc) return;
@@ -779,6 +815,7 @@
   }
   async function restoreFile(f) {
     const ext = extOf(f.name), st = $('replyStatus');
+    if (!sizeOk(f, st)) return;
     const opts = { off: [...state.backOff], numbers: state.backNum, dates: state.backDate, lang: LANG };
     try {
       if (['xlsx', 'xlsm'].includes(ext)) {
@@ -802,14 +839,16 @@
         await saveWithStatus('sirdas-acilmis.' + ext, r.text, st); st.textContent = pre + st.textContent;
       } else if (['xls', 'ods'].includes(ext)) return restoreXlsx(f);
       else { $('reply').value = await f.text(); $('replyTag').hidden = true; renderRestore(); }
-    } catch { st.textContent = t('replyFail'); }
+    } catch (e) { st.textContent = limitText(e, f.name) || t('replyFail'); }
   }
   async function restoreXlsx(f) {
     const st = $('replyStatus');
     try {
       await needXlsx();
       const k = eff(), opts = { off: [...state.backOff], numbers: state.backNum, dates: state.backDate, lang: LANG };
-      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true, cellNF: true });
+      const raw = new Uint8Array(await f.arrayBuffer());
+      S.checkZip(raw);
+      const wb = XLSX.read(raw, { type: 'array', cellDates: true, cellNF: true });
       let done = 0; const unknown = new Set();
       for (const n of wb.SheetNames) {
         const ws = wb.Sheets[n]; if (!ws['!ref']) continue;
@@ -833,7 +872,7 @@
       const pre = t('replyDone', { n: nf(done) });
       await saveWithStatus('sirdas-acilmis.xlsx', new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx', cellDates: true })), st);
       st.textContent = pre + st.textContent + (unknown.size ? ' ' + t('repUnknown') + ' ' + [...unknown].map(x => `[${x}]`).join(', ') : '');
-    } catch { st.textContent = t('replyFail'); }
+    } catch (e) { st.textContent = limitText(e, f.name) || t('replyFail'); }
   }
 
   /* ---------------- Şablonlar ---------------- */

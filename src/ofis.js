@@ -26,6 +26,7 @@
    * ürettiği not biçimleri ExcelJS'te okunamaz. Dönüş: { bytes, notes }
    */
   async function stripNotes(bytes) {
+    S.checkZip(bytes);
     const zip = await need('JSZip').loadAsync(bytes);
     let notes = 0;
     for (const n of Object.keys(zip.files)) {
@@ -101,6 +102,7 @@
   async function excelRestore(bytes, key, opts = {}) {
     const ExcelJS = need('ExcelJS');
     const wb = new ExcelJS.Workbook();
+    S.checkZip(bytes);
     try { await wb.xlsx.load(bytes); } catch { await wb.xlsx.load((await stripNotes(bytes)).bytes); }
     let done = 0; const unknown = new Set();
     const FORMULA = ExcelJS.ValueType.Formula;
@@ -138,6 +140,7 @@
   }
   async function loadParts(bytes) {
     const JSZip = need('JSZip');
+    S.checkZip(bytes);
     const zip = await JSZip.loadAsync(bytes);
     const kind = kindOf(zip); if (!kind) throw new Error('not_office');
     const { main, rest } = textParts(zip, kind);
@@ -159,12 +162,52 @@
     }
     return gs;
   }
+  /**
+   * Görseller maskelenmez (resimdeki yazı metin değildir). Kullanıcının kendi dosyasında neye bakacağını bilmesi için
+   * görsellerin yerini listeler: PowerPoint'te slayt numarası, Word'de paragraf sırası ve yanındaki metin,
+   * üst/alt bilgi ve slayt şablonları ayrıca. Hiçbir şey değiştirmez.
+   */
+  const BLIP = /<a:blip\b[^>]*\br:(?:embed|link)=/g;
+  const plain = xml => S.decodeXml(xml.replace(/<w:tab\/>/g, ' ').replace(/<\/w:p>/g, ' ').replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+  async function imagesIn(zip, kind) {
+    const places = [];
+    const count = xml => (xml.match(BLIP) || []).length + (xml.match(/<v:imagedata\b/g) || []).length;
+    const files = Object.keys(zip.files).filter(n => n.endsWith('.xml'));
+    if (kind === 'pptx') {
+      for (const n of files.filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => num(a) - num(b))) {
+        const c = count(await zip.file(n).async('string'));
+        if (c) places.push({ where: 'slide', n: num(n), count: c });
+      }
+      let tpl = 0;
+      for (const n of files.filter(n => /^ppt\/(slideLayouts|slideMasters)\/[^/]+\.xml$/.test(n))) tpl += count(await zip.file(n).async('string'));
+      if (tpl) places.push({ where: 'template', count: tpl });
+    } else {
+      const xml = await zip.file('word/document.xml').async('string');
+      const re = /<w:drawing\b[\s\S]*?<\/w:drawing>|<v:imagedata\b[^>]*>/g;
+      for (const m of xml.matchAll(re)) {
+        if (m[0].startsWith('<w:drawing') && !BLIP.test(m[0])) { BLIP.lastIndex = 0; continue; } // grafik veya şekil, resim değil
+        BLIP.lastIndex = 0;
+        const before = xml.slice(0, m.index);
+        const para = (before.match(/<w:p[ >]/g) || []).length;
+        const prev = plain(before.slice(-4000)), next = plain(xml.slice(m.index + m[0].length, m.index + m[0].length + 4000));
+        const near = prev ? '…' + prev.slice(-60) : next ? next.slice(0, 60) + '…' : '';
+        const last = places[places.length - 1];
+        if (last && last.n === para) last.count++; else places.push({ where: 'para', n: para, near, count: 1 });
+      }
+      for (const [re2, where] of [[/^word\/header\d*\.xml$/, 'header'], [/^word\/footer\d*\.xml$/, 'footer']]) {
+        let c = 0;
+        for (const n of files.filter(n => re2.test(n))) c += count(await zip.file(n).async('string'));
+        if (c) places.push({ where, count: c });
+      }
+    }
+    return { total: places.reduce((a, p) => a + p.count, 0), places: places.slice(0, 60), more: Math.max(0, places.length - 60) };
+  }
   /** Ekranda gösterilecek düz metin (gövde ya da slaytlar). */
   async function docInfo(bytes) {
-    const { kind, parts } = await loadParts(bytes);
+    const { zip, kind, parts } = await loadParts(bytes);
     const paras = groupsOf(parts.filter(p => p.main)).map(g => g.nodes.map(n => n.value).join(''));
     const slides = kind === 'pptx' ? parts.filter(p => p.main).length : 0;
-    return { kind, text: paras.join('\n'), paragraphs: paras.length, slides };
+    return { kind, text: paras.join('\n'), paragraphs: paras.length, slides, images: await imagesIn(zip, kind) };
   }
   function editsFor(groups, outs) {
     const per = new Map();
@@ -257,9 +300,12 @@
 
   /* ================= PDF (yalnızca metin) ================= */
   /** PDF'in metnini sayfa sayfa çıkarır. Taranmış (görüntü) PDF'te metin boş gelir. */
-  async function pdfText(bytes) {
+  async function pdfText(bytes, opts = {}) {
     const pdfjs = need('pdfjsLib');
     const doc = await pdfjs.getDocument({ data: bytes, isEvalSupported: false, disableFontFace: true, useSystemFonts: false, verbosity: 0 }).promise;
+    // Sayfaları dolaşmadan önce sayfa sınırı: çok sayfalı PDF sekmeyi kilitlemesin.
+    const max = opts.maxPages ?? S.LIMITS.pdfPages;
+    if (doc.numPages > max) { await doc.destroy?.(); throw S.limitError('too_many_pages', { pages: doc.numPages, max }); }
     const pages = [];
     for (let i = 1; i <= doc.numPages; i++) {
       const tc = await (await doc.getPage(i)).getTextContent();

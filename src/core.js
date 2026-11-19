@@ -16,7 +16,7 @@
   else root.Sirdas = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
 
   /* ---------------- 1. Metin yardımcıları ---------------- */
   const tl = s => String(s).toLocaleLowerCase('tr');
@@ -1073,6 +1073,53 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
     return { text: xmlApply(text, edits), done, unknown: [...unknown] };
   }
 
+  /* ================= Dosya sınırları ================= */
+  // Büyük bir dosya, özellikle telefonda sekmeyi kilitleyip o anki çalışmayı kaybettirebilir. Okumadan önce:
+  // dosya boyutu (app.js), Office/Excel'de açılmış toplam içerik ve parça sayısı (zip dizini), PDF'te sayfa sayısı.
+  const MB = 1024 * 1024;
+  const LIMITS = {
+    file: { sheet: 30 * MB, office: 40 * MB, pdf: 60 * MB, text: 20 * MB },
+    inflated: 250 * MB, // Office/Excel dosyası açıldığında toplam içerik
+    entries: 10000, // zip içindeki parça sayısı
+    pdfPages: 500,
+  };
+  const limitError = (code, extra) => Object.assign(new Error(code), { code }, extra || {});
+  /**
+   * Zip'in (xlsx, docx, pptx, ods) merkezi dizininden açılmış toplam boyutu ve parça sayısını okur;
+   * hiçbir parçayı açmaz. Zip değilse null. ZIP64 (4 GB üstü alanlar) "çok büyük" sayılır.
+   */
+  function zipInflated(bytes) {
+    const n = bytes.length;
+    if (n < 22 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) return null;
+    const u16 = o => bytes[o] | (bytes[o + 1] << 8), u32 = o => (u16(o) | (u16(o + 2) << 16)) >>> 0;
+    let eocd = -1;
+    for (let o = n - 22; o >= Math.max(0, n - 22 - 65535); o--) if (u32(o) === 0x06054b50) { eocd = o; break; }
+    if (eocd < 0) return null;
+    const count = u16(eocd + 10), cdSize = u32(eocd + 12), cdOff = u32(eocd + 16);
+    if (count === 0xffff || cdOff === 0xffffffff || cdSize === 0xffffffff) return { total: Infinity, entries: count, zip64: true };
+    let o = cdOff, total = 0, entries = 0;
+    while (o + 46 <= n && u32(o) === 0x02014b50) {
+      const size = u32(o + 24);
+      if (size === 0xffffffff) return { total: Infinity, entries, zip64: true };
+      total += size; entries++;
+      o += 46 + u16(o + 28) + u16(o + 30) + u16(o + 32);
+    }
+    return { total, entries, zip64: false };
+  }
+  /** Zip açılmadan önce çağrılır; sınırı aşarsa code: 'too_big_inflated' hatası atar. */
+  function checkZip(bytes, limits = LIMITS) {
+    const z = zipInflated(bytes);
+    if (z && (z.total > limits.inflated || z.entries > limits.entries)) throw limitError('too_big_inflated', { total: z.total, entries: z.entries });
+    return z;
+  }
+  /** Dosya türünün okuma öncesi boyut sınırı (bayt). */
+  function fileLimit(ext, limits = LIMITS) {
+    if (['xlsx', 'xlsm', 'xls', 'ods'].includes(ext)) return limits.file.sheet;
+    if (['docx', 'pptx'].includes(ext)) return limits.file.office;
+    if (ext === 'pdf') return limits.file.pdf;
+    return limits.file.text;
+  }
+
   return {
     VERSION, CATS, DEFAULT_CATS,
     tl, clean, slug, colName, normHeader, termSource, canSpread, makeMatcher,
@@ -1083,6 +1130,7 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
     parseNumber, formatNumber, parseDate, formatDate, fmtLocal, addDays, niceStep, bucketLabel,
     makeProfile, applyProfile, profileScore, validProfile,
     encryptKey, decryptKey, parseTable, makeSheet,
-    maskTexts, xmlScan, xmlApply, decodeXml, encodeXml, redistribute, structFields, maskStruct, restoreStruct, walkJSON, decimalsOf: n => decimalsOf(n), roundest
+    maskTexts, xmlScan, xmlApply, decodeXml, encodeXml, redistribute, structFields, maskStruct, restoreStruct, walkJSON, decimalsOf: n => decimalsOf(n), roundest,
+    LIMITS, limitError, zipInflated, checkZip, fileLimit
   };
 });
