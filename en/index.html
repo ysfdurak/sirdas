@@ -53,6 +53,7 @@ a { color: var(--accent) }
 .wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 48px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   display: grid; gap: 36px }
+#main { display: grid; gap: 36px; min-width: 0 }
 header { display: grid; gap: 12px }
 .brand { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; font: 600 13px/1.3 var(--mono); letter-spacing: .06em }
 .brand-r { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px }
@@ -272,6 +273,7 @@ footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: 
     <h1><button class="bigbar" id="demoBar" type="button" aria-pressed="false" data-ttl="demoTitle" title="Show or hide the masked value">[OPERASYON_1]</button> <span data-t="heroRest">never reaches the AI.</span></h1>
     <p class="lede" data-t="lede">Pick the column, row or cell you want to hide. Project names, customer codes, costs: the data does not have to be personal. Sırdaş tags what you pick, hides numbers and dates without breaking the maths, and can put everything back when the answer arrives.</p>
   </header>
+  <main id="main">
 
   <section class="guide" id="guide" data-tal="guideAria" aria-label="First try with the sample" hidden>
     <div class="ghead"><h2 data-t="guideH">Try the sample: what exactly will the other side see?</h2><button type="button" class="b" id="guideClose" data-t="guideClose">Close</button></div>
@@ -450,6 +452,7 @@ footer { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: 
     <div><h3 data-t="lim4h">Images are not changed</h3><p data-t="lim4p">In Word and PowerPoint, text, tables, notes, headers and chart labels are hidden; text inside pictures is not. A PDF’s layout is not kept, only its text; a scanned PDF has no text.</p></div>
     <div><h3 data-t="lim3h">Reversible while the key exists</h3><p data-t="lim3p">This is pseudonymisation, not anonymisation. Keep the key file and its password in different places. Your company’s rules and data protection law still apply to company data.</p></div>
   </section>
+  </main>
   <footer>
     <span>Sırdaş <span id="ver"></span></span>
     <span data-t="footLicense">PolyForm Shield 1.0.0 licence</span>
