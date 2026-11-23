@@ -174,3 +174,7 @@ pdf.js sayfaların metnini çıkarır ve metin Metin görünümünde maskelenir.
 - **Excel tarihleri ve saat dilimi:** Tabloyu SheetJS okur (tarih = bu bilgisayarın yerel saatiyle gece yarısı), biçimi koruyan çıktıyı ExcelJS yazar (tarihi UTC sayar). Arada çeviri olmadığı için İstanbul'da 2 Mart 1 Mart'a dönüyor, New York'ta hücreye saat kesri ekleniyordu. `src/ofis.js` içindeki `toExcelDate` / `fromExcelDate` yerel duvar saatini UTC duvar saatine (ve tersine) aktarır.
 - **Test:** `mcp/sunucu.test.mjs` hem görünen günü hem Excel'in sakladığı seri sayıyı karşılaştırır; CI aynı testi İstanbul, New York ve Tokyo saat dilimlerinde de çalıştırır.
 - **Sorulursa:** "Neden tarih yerine metin yazmıyorsun?" — Excel'de tarih sütunu tarih olarak kalmalı; sıralama, filtre ve formül ona bağlı. Sorun tarihin kendisinde değil, iki kitaplığın saat dilimi varsayımının farklı olmasındaydı.
+
+## Yayın bağlantısı (23 Kasım 2026)
+
+Cloudflare Workers Builds'in GitHub uygulaması `sirdas` deposuna erişimini kaybetmişti; site 1.1.0'da kalmıştı. Belirti: Cloudflare ayarlarında "This project is disconnected from your Git account" uyarısı. Çözüm: GitHub → Settings → Applications → Cloudflare Workers and Pages → Configure → Repository access'e `sirdas`'ı eklemek. Komutlar: derleme `npm run build`, yayın `npx wrangler deploy`, dal `main`.
