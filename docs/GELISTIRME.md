@@ -166,3 +166,11 @@ pdf.js sayfaların metnini çıkarır ve metin Metin görünümünde maskelenir.
 - **Kontrol listesi daha somut.** Seçilmemiş serbest metin sütununda e-posta, telefon gibi kişisel veri varsa ve otomatik bulma kapalıysa, uyarı türünü ve sayısını söylüyor (ör. "Not: … (E-posta 1)"). Ayrı, geçici bir anahtarla taranır; asıl anahtar değişmez.
 - **"Bütün sütunlar değişti" yanlışı.** Seçilmemiş serbest metin sütunu varken bu cümle yazılmıyor; o sütunların kontrol listesinde olduğu söyleniyor.
 
+
+## 1.2.4 · 23 Kasım 2026 (denetim D06, D14)
+
+- **CSV yazımı (MCP, `maskele_dosya`):** Önceden TSV'deki sekmeler `;` ile değiştiriliyordu; içinde `;` olan "Raf A; Raf B" iki hücreye bölünüyor, sonraki değerler bir sütun kayıyordu. Artık `S.toCSV()` ayırıcı, tırnak ya da satır sonu içeren değeri tırnağa alır (`""` kaçışıyla). Ayırıcı kaynak dosyanınkidir. Geri açmadaki CSV yazımı satır sonlarını da tırnaklar.
+- **CSV okuma:** `parseTable` satırları tırnak dışındaki satır sonlarından böler; tırnak içinde satır sonu olan hücre tek hücre kalır.
+- **Excel tarihleri ve saat dilimi:** Tabloyu SheetJS okur (tarih = bu bilgisayarın yerel saatiyle gece yarısı), biçimi koruyan çıktıyı ExcelJS yazar (tarihi UTC sayar). Arada çeviri olmadığı için İstanbul'da 2 Mart 1 Mart'a dönüyor, New York'ta hücreye saat kesri ekleniyordu. `src/ofis.js` içindeki `toExcelDate` / `fromExcelDate` yerel duvar saatini UTC duvar saatine (ve tersine) aktarır.
+- **Test:** `mcp/sunucu.test.mjs` hem görünen günü hem Excel'in sakladığı seri sayıyı karşılaştırır; CI aynı testi İstanbul, New York ve Tokyo saat dilimlerinde de çalıştırır.
+- **Sorulursa:** "Neden tarih yerine metin yazmıyorsun?" — Excel'de tarih sütunu tarih olarak kalmalı; sıralama, filtre ve formül ona bağlı. Sorun tarihin kendisinde değil, iki kitaplığın saat dilimi varsayımının farklı olmasındaydı.

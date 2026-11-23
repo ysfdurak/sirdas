@@ -23,6 +23,10 @@ jobs:
         run: cd mcp && npm ci --no-audit --no-fund
       - name: Testler
         run: npm test
+      - name: Excel tarihleri farklı saat dilimlerinde aynı gün kalıyor mu
+        run: |
+          cd mcp
+          for tz in Europe/Istanbul America/New_York Asia/Tokyo; do TZ=$tz node --test sunucu.test.mjs || exit 1; done
       - name: Derlenmiş sayfalar kaynakla aynı mı
         run: |
           node tools/build.mjs

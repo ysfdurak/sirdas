@@ -76,6 +76,11 @@
     }
     return { bytes: await zip.generateAsync({ type: 'uint8array' }), notes };
   }
+  // Saat dilimi köprüsü: SheetJS tarihleri yerel saatle ("2 Mart 00:00 bu bilgisayarda"), ExcelJS ise UTC ile
+  // okur/yazar. Dönüştürmeden yazınca İstanbul'da 2 Mart 1 Mart'a dönüyor, New York'ta hücreye saat kesri ekleniyordu.
+  // Excel'in kendisi saat dilimi tutmaz; ekranda görünen gün ve saat iki yönde de aynı kalmalı.
+  const toExcelDate = d => new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds()));
+  const fromExcelDate = d => new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds());
   async function excelMaskPreserve(bytes, book, res, cfg = {}) {
     const ExcelJS = need('ExcelJS');
     const wb = new ExcelJS.Workbook();
@@ -98,7 +103,7 @@
         if ((val === '' || val == null) && (had == null || had === '')) return;
         if (cell.type === FORMULA) rep.formulas++;
         if (cell.hyperlink) rep.links++;
-        cell.value = val === '' ? null : val;
+        cell.value = val === '' ? null : val instanceof Date ? toExcelDate(val) : val;
       }));
       ws.eachRow({ includeEmpty: false }, row => row.eachCell({ includeEmpty: false }, cell => {
         if (cell.type === FORMULA) { cell.value = null; rep.formulas++; }
@@ -139,10 +144,11 @@
       ws.eachRow({ includeEmpty: false }, (row, n) => { if (headRow) return; headRow = n; row.eachCell((c, ci) => { heads[ci] = textOf(c.value); }); });
       ws.eachRow({ includeEmpty: false }, (row, n) => row.eachCell({ includeEmpty: false }, (cell, ci) => {
         if (cell.type === FORMULA || (cell.isMerged && cell.master !== cell)) return;
-        const v = textOf(cell.value); if (v == null) return;
+        let v = textOf(cell.value); if (v == null) return;
+        if (v instanceof Date) v = fromExcelDate(v);
         const r = S.restoreValue(v, key, opts, n > headRow ? heads[ci] : null);
         (r.unknown || []).forEach(u => unknown.add(u));
-        if (r.changed) { cell.value = r.value; done += r.changed; }
+        if (r.changed) { cell.value = r.value instanceof Date ? toExcelDate(r.value) : r.value; done += r.changed; }
       }));
     }
     const names = new Set(wb.worksheets.map(w => w.name));
