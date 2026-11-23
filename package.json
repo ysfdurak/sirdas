@@ -1,6 +1,6 @@
 {
   "name": "sirdas",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "private": true,
   "description": "Sırdaş: yapay zekâya göndermeden önce tablo ve metinde seçtiğin değerleri maskeleyen, yanıtı geri açan araç (web + yerel MCP).",
   "scripts": {

@@ -16,7 +16,7 @@
   else root.Sirdas = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  const VERSION = '1.2.2';
+  const VERSION = '1.2.3';
 
   /* ---------------- 1. Metin yardımcıları ---------------- */
   const tl = s => String(s).toLocaleLowerCase('tr');
@@ -933,6 +933,9 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
     if (v && typeof v === 'object') { for (const key of Object.keys(v)) walkJSON(v[key], fn, path ? path + '.' + key : key, v, key); return; }
     fn(path, v, holder, k);
   }
+  /** Rakamlardan oluşan, başında 0 olan ya da 7+ haneli metin bir koddur (VKN, T.C. kimlik, sipariş/müşteri no): tutar gibi
+   *  ölçeklenmez, etiketlenir. Ölçeklemek bir gerçek değeri bilen herkese katsayıyı, dolayısıyla diğer kodları da açar. */
+  const isCodeLike = v => typeof v === 'string' && /^\s*\d+\s*$/.test(v) && (/^\s*0\d/.test(v) || v.trim().length >= 7);
   const lastSeg = p => String(p).replace(/\[\]/g, '').split(/[./]/).filter(Boolean).pop() || p;
   /** Alanların listesi: yol, adet, tür, örnek. kind: 'json' | 'xml' */
   function structFields(text, kind) {
@@ -940,7 +943,8 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
     const add = (path, v) => {
       let f = map.get(path); if (!f) { f = { path, name: lastSeg(path).replace(/^@/, ''), count: 0, num: 0, date: 0, str: 0, samples: [] }; map.set(path, f); }
       f.count++;
-      if (typeof v === 'number' || (typeof v === 'string' && parseNumber(v))) f.num++;
+      if (isCodeLike(v)) f.str++;
+      else if (typeof v === 'number' || (typeof v === 'string' && parseNumber(v))) f.num++;
       else if (typeof v === 'string' && parseDate(v)) f.date++;
       else f.str++;
       if (f.samples.length < 3 && v !== '' && v != null && !f.samples.includes(String(v))) f.samples.push(String(v));
@@ -1123,7 +1127,7 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
   return {
     VERSION, CATS, DEFAULT_CATS,
     tl, clean, slug, colName, normHeader, termSource, canSpread, makeMatcher,
-    validTCKN, validVKN, validIBAN, luhn,
+    validTCKN, validVKN, validIBAN, luhn, isCodeLike,
     suggestColumns, newKey, upgradeKey, mergeKeys, commit, allEntries,
     maskText, maskBook, toAOA, toTSV, cellValue, partsToText,
     restoreText, restoreValue, restoredToText,

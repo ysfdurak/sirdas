@@ -247,3 +247,16 @@ test('ölçeklenen Excel sayısı iki ondalık fazla saklanır, geri açınca ta
   assert.equal(S.restoreValue(v, key, { numbers: true }, 'Tutar').value, 412000);
   assert.equal(S.restoredToText(S.restoreText(`toplam ${v}`, key, { numbers: true }).parts), 'toplam 412000');
 });
+
+test('metin olarak yazılmış kodlar (VKN, T.C. kimlik, başında 0) sayı sayılmaz, etiketlenir', () => {
+  assert.equal(S.isCodeLike('1234567890'), true);
+  assert.equal(S.isCodeLike('0012'), true);
+  assert.equal(S.isCodeLike('412000'), false);
+  assert.equal(S.isCodeLike(412000), false);
+  assert.equal(S.isCodeLike('412.000'), false);
+  const f = S.structFields(JSON.stringify({ k: [{ vkn: '1234567890', tutar: 412000, no: '000123' }, { vkn: '9876543210', tutar: 188500, no: '000456' }] }), 'json');
+  const tur = Object.fromEntries(f.map(x => [x.path, x.type]));
+  assert.equal(tur['k[].vkn'], 'text');
+  assert.equal(tur['k[].no'], 'text');
+  assert.equal(tur['k[].tutar'], 'number');
+});

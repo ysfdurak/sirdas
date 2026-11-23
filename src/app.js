@@ -260,6 +260,7 @@
       const v = sh.rows[r][c].trim(); if (!v) continue; n++;
       const raw = sh.raw && sh.raw[r] ? sh.raw[r][c] : undefined;
       if (raw instanceof Date || S.parseDate(v)) date++;
+      else if (typeof raw === 'string' && S.isCodeLike(raw)) { /* Excel'de metin olarak yazılmış kod: etiketlenir, ölçeklenmez */ }
       else if (typeof raw === 'number' || S.parseNumber(v)) num++;
       const k = S.clean(v); if (!uniq.has(k)) uniq.set(k, v);
     }
@@ -464,9 +465,25 @@
     let len = 0, k = 0; for (let r = sc.hdr ? 1 : 0; r < sh.rows.length && k < 400; r++) { const v = String(sh.rows[r][c] || '').trim(); if (v) { len += v.length; k++; } }
     return k > 0 && len / k >= 18;
   }
+  /** Sütunun maskeli çıktısında açık kalan metinde kişisel veri var mı? Etiketlenen parçalar atlanır; ayrı, geçici anahtarla
+   *  taranır, asıl anahtara dokunmaz. Dönüş: 'E-posta 1, Telefon 2' ya da ''. */
+  function piiIn(so, c) {
+    if (!so) return '';
+    const vals = [];
+    for (const row of so.rows) {
+      const v = row[c]; if (v == null || vals.length >= 400) continue;
+      const txt = typeof v === 'string' ? v : v.p ? v.p.filter(x => typeof x === 'string').join(' ') : String(v.v ?? '');
+      if (txt.trim()) vals.push(txt);
+    }
+    if (!vals.length) return '';
+    let res; try { res = S.maskText(vals.join('\n'), S.newKey(), { auto: true, cats: state.cats, manual: [] }); } catch { return ''; }
+    const n = {}; for (const k in res.counts || {}) { const cat = k.split('|')[0]; n[cat] = (n[cat] || 0) + 1; }
+    return Object.entries(n).map(([cat, k]) => catLabel(cat) + ' ' + nf(k)).join(', ');
+  }
   function firstTag(so, c) { if (!so) return ''; for (const row of so.rows) { const v = row[c]; if (v && v.p) { const q = v.p.find(x => typeof x !== 'string' && x.t); if (q) return `[${q.t}]`; } } return ''; }
   function sendGroups() {
     const r = cur(), chg = [], same = [], chk = [];
+    let free = 0;
     if (!r || !state.book) return null;
     state.book.sheets.forEach((sh, i) => {
       const sc = state.sheetCfg[i]; if (!sc.include) return;
@@ -474,8 +491,12 @@
       for (let c = 0; c < sh.w; c++) {
         const h = pre + headerOf(sh, sc, c), rule = sc.cols[c];
         if (rule) chg.push(h + ': ' + t('sum_' + rule.action, { e: firstTag(so, c) || '[…]' }));
-        else if (isFree(sh, sc, c)) chk.push(t('sum_free', { h }));
-        else same.push(h);
+        else if (isFree(sh, sc, c)) {
+          // Kişisel veri tespiti kapalıyken serbest metinde e-posta, telefon gibi değerler açık gider: türünü ve sayısını söyle.
+          free++;
+          const pii = state.auto ? '' : piiIn(so, c);
+          chk.push(pii ? t('sum_freePii', { h, f: pii }) : t('sum_free', { h }));
+        } else same.push(h);
       }
       if (sc.cells.size) chg.push(pre + t('sum_cells', { n: nf(sc.cells.size) }));
     });
@@ -483,7 +504,7 @@
     if (s.spread) chg.push(t('sum_spread', { n: nf(s.spread) }));
     if (r.leaks && r.leaks.total) chk.unshift(t('sum_leaks', { n: nf(r.leaks.total) }));
     if (s.headersOpen && s.headersOpen.length) chk.push(t('sum_heads', { h: [...new Set(s.headersOpen)].slice(0, 8).join(', ') }));
-    return { chg, same, chk };
+    return { chg, same, chk, free };
   }
   /** Word/PowerPoint: görseller maskelenmez; kullanıcı kendi dosyasında hangi slayta, paragrafa bakacağını görür. */
   function imagePlaces(im) {
@@ -536,7 +557,7 @@
     box.hidden = !g || (!g.chg.length && !g.chk.length);
     if (box.hidden) return;
     const h = document.createElement('h3'); h.textContent = t('sumH'); box.append(h);
-    for (const [cls, title, list, empty] of [['chg', t('sumChg'), g.chg, '—'], ['same', t('sumSame'), g.same, t('sum_sameNone')], ['chk', t('sumChk'), g.chk, t('sum_chkNone')]]) {
+    for (const [cls, title, list, empty] of [['chg', t('sumChg'), g.chg, '—'], ['same', t('sumSame'), g.same, t(g.free ? 'sum_sameFree' : 'sum_sameNone')], ['chk', t('sumChk'), g.chk, t('sum_chkNone')]]) {
       const d = document.createElement('div'); d.className = 'grp ' + cls;
       // Liste uzunsa kutu kaydırılır; klavyeyle de kaydırılabilsin diye odaklanabilir bölge.
       d.tabIndex = 0; d.setAttribute('role', 'region'); d.setAttribute('aria-label', title);
