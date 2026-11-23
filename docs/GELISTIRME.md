@@ -159,3 +159,10 @@ pdf.js sayfaların metnini çıkarır ve metin Metin görünümünde maskelenir.
 - **Görsel listesi** (`ofis.js › imagesIn`): `docInfo` ve böylece belge açılışı, görsellerin yerini döndürür: PowerPoint'te slayt numarası, Word'de paragraf sırası ve hemen önceki metin, üst/alt bilgi, slayt şablonu. Grafik (`c:chart`) resim sayılmaz. Arayüz bunu gönderim özetinde "Bakılacak yerler" olarak gösterir, indirmeden önce.
 - **Testler** (`mcp/ofis.test.mjs`): 300 MB'lık sıkışmış bir zip bombası açılmadan reddedilir; PDF sayfa sınırı; görsel yerleri (slayt, paragraf ve yanındaki metin, üst bilgi, şablon) ve maskelemeden sonra görselin değişmeden durduğu.
 - **Gerçek açılma sınırı (dış inceleme, 1.2.2):** Zip dizinindeki açılmış boyut dosyanın kendi beyanıdır; yanlış beyanlı bir dosya ön denetimi geçebilirdi. Artık `ofis.js › checkInflate` her parçayı JSZip'in akışıyla (`internalStream`) açar, gelen baytları toplar ve 250 MB aşılınca akışı durdurup `too_big_inflated` (`measured: true`) hatası verir. Word/PowerPoint/Excel yükleme, geri açma ve MCP (`zipOk`) bu kapıdan geçer. Bedeli: dosya bir kez fazladan açılır (normal dosyada birkaç yüz ms). Test: dizini 1000 bayt diyen 300 MB'lık zip, `ofis.test.mjs`.
+
+## 1.2.3 · 23 Kasım 2026 (uçtan uca test bulguları)
+
+- **Kod gibi görünen değerler ölçeklenmiyor.** JSON/XML'de ve Excel'de metin olarak yazılmış, yalnız rakamdan oluşan, başı 0 olan ya da 7+ haneli değerler (VKN, T.C. kimlik, müşteri/sipariş no) artık sayı sayılmıyor. Varsayılan işlemleri etiketleme (`isCodeLike`, `structFields`, `colProfile`). Önceden bunlar katsayıyla ölçekleniyordu: tek bir gerçek değeri bilen, katsayıyı ve diğer kodları bulabiliyordu. Gerçek sayılar (JSON sayısı, Excel sayı hücresi) etkilenmez.
+- **Kontrol listesi daha somut.** Seçilmemiş serbest metin sütununda e-posta, telefon gibi kişisel veri varsa ve otomatik bulma kapalıysa, uyarı türünü ve sayısını söylüyor (ör. "Not: … (E-posta 1)"). Ayrı, geçici bir anahtarla taranır; asıl anahtar değişmez.
+- **"Bütün sütunlar değişti" yanlışı.** Seçilmemiş serbest metin sütunu varken bu cümle yazılmıyor; o sütunların kontrol listesinde olduğu söyleniyor.
+
