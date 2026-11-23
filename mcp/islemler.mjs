@@ -180,7 +180,12 @@ export async function maskeleDosya(cfg, a) {
   S.commit(key, res); await anahtarKaydet(cfg, key);
 
   const out = a.cikti ? izinliYol(cfg, a.cikti) : ciktiYolu(file, 'maskeli').replace(/\.(xls|ods|xlsm)$/i, '.xlsx');
-  if (TABLE.test(out)) writeFileSync(out, S.toTSV(res.sheets.find(s => s.include), cfg.lang).replace(/\t/g, out.endsWith('.tsv') ? '\t' : ';'));
+  if (TABLE.test(out)) {
+    // Ayırıcı: .tsv'de sekme; .csv'de kaynak dosyanınki (sekme/;/,), bilinmiyorsa ;
+    const src = TABLE.test(file) ? oku(file, 'utf8').split('\n')[0] : '';
+    const d = out.endsWith('.tsv') ? '\t' : src.includes('\t') ? '\t' : src.includes(';') || !src.includes(',') ? ';' : ',';
+    writeFileSync(out, S.toCSV(res.sheets.find(s => s.include), cfg.lang, d));
+  }
   else if (PRESERVE.test(file) && a.bicimi_koru !== false) {
     const full = { ...res };
     const x = await O.excelMaskPreserve(await zipOk(new Uint8Array(oku(file)), file), book, full, { hideSheetNames: applied.cfg.hideSheetNames });
@@ -251,7 +256,7 @@ export async function geriAcDosya(cfg, a) {
     if (TABLE.test(file)) {
       const rows = S.parseTable(text) || []; const d = text.includes('\t') ? '\t' : text.split('\n')[0].includes(';') ? ';' : ',';
       const outRows = rows.map((row, r) => row.map((v, c) => { const x = S.restoreValue(v, key, opts, r > 0 ? rows[0][c] : null); (x.unknown || []).forEach(u => unknown.add(u)); done += x.changed; return String(x.value); }));
-      writeFileSync(out, outRows.map(r => r.map(v => (v.includes(d) || v.includes('"')) ? `"${v.replace(/"/g, '""')}"` : v).join(d)).join('\n'));
+      writeFileSync(out, outRows.map(r => r.map(v => (v.includes(d) || /["\r\n]/.test(v)) ? `"${v.replace(/"/g, '""')}"` : v).join(d)).join('\n'));
     } else {
       const r = S.restoreText(text, key, opts); r.unknown.forEach(u => unknown.add(u)); done = r.done + r.dates + r.nums;
       writeFileSync(out, S.restoredToText(r.parts));

@@ -16,7 +16,7 @@
   else root.Sirdas = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  const VERSION = '1.2.3';
+  const VERSION = '1.2.4';
 
   /* ---------------- 1. Metin yardımcıları ---------------- */
   const tl = s => String(s).toLocaleLowerCase('tr');
@@ -605,6 +605,11 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
     const drop = new Set(sheetOut.dropped);
     return sheetOut.rows.map(row => row.map(cellValue).filter((_, c) => !drop.has(c)));
   }
+  /** CSV yazımı: ayırıcı, tırnak ya da satır sonu içeren değer tırnağa alınır; böylece dosya yeniden açıldığında her değer kendi sütununda kalır. */
+  function toCSV(sheetOut, lang, d = ';') {
+    const q = v => { const s = String(v); return (s.includes(d) || /["\r\n]/.test(s)) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    return toAOA(sheetOut).map(r => r.map(v => q(v instanceof Date ? fmtLocal(v, lang) : v)).join(d)).join('\n');
+  }
   function toTSV(sheetOut, lang) {
     const safe = s => String(s).replace(/[\t\r\n]+/g, ' ');
     return toAOA(sheetOut).map(r => r.map(v => safe(v instanceof Date ? fmtLocal(v, lang) : v)).join('\t')).join('\n');
@@ -806,7 +811,12 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
   /* ---------------- 10. Tablo okuma yardımcıları ---------------- */
   /** Excel'den kopyalanan ya da CSV metnini satır/sütun dizisine çevirir. */
   function parseTable(text) {
-    const lines = String(text).replace(/\r/g, '').split('\n');
+    // Satırlara tırnak dışındaki satır sonlarından böl: tırnak içinde satır sonu olan hücre tek hücre kalır.
+    const src = String(text).replace(/\r\n?/g, '\n'), lines = []; let st = 0, q = false;
+    for (let i = 0; i <= src.length; i++) {
+      if (i === src.length || (src[i] === '\n' && !q)) { lines.push(src.slice(st, i)); st = i + 1; }
+      else if (src[i] === '"') q = !q;
+    }
     while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
     if (!lines.length) return null;
     const d = ['\t', ';', '|', ','].map(x => [x, splitCells(lines[0], x).length]).sort((a, b) => b[1] - a[1])[0][0];
@@ -1129,7 +1139,7 @@ ayşe fatma emine hatice zeynep elif meryem şerife zehra hanife merve özlem es
     tl, clean, slug, colName, normHeader, termSource, canSpread, makeMatcher,
     validTCKN, validVKN, validIBAN, luhn, isCodeLike,
     suggestColumns, newKey, upgradeKey, mergeKeys, commit, allEntries,
-    maskText, maskBook, toAOA, toTSV, cellValue, partsToText,
+    maskText, maskBook, toAOA, toTSV, toCSV, cellValue, partsToText,
     restoreText, restoreValue, restoredToText,
     parseNumber, formatNumber, parseDate, formatDate, fmtLocal, addDays, niceStep, bucketLabel,
     makeProfile, applyProfile, profileScore, validProfile,

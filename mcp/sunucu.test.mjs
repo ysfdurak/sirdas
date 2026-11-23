@@ -9,6 +9,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 const require = createRequire(import.meta.url);
 const XLSX = require('../lib/xlsx.full.min.js');
+const S = require('../src/core.js');
 
 const SECRETS = ['Proje Atlas', 'Kuzey Hattı', 'Selin Aksoy', 'Kerem Tan', 'ACME Müşteri', '10000000146', '412000', '268500'];
 
@@ -57,6 +58,21 @@ test('MCP: maskele, AI yanıtını kaydet, dosyayı geri aç; gerçek değer AI 
   assert.deepEqual(back.SheetNames, ['ACME Müşteri']);
   const rows = XLSX.utils.sheet_to_json(back.Sheets['ACME Müşteri'], { header: 1, raw: true });
   assert.equal(rows[1][0], 'Proje Atlas'); assert.equal(rows[1][3], 412000); assert.equal(rows[1][2].getDate(), 2);
+  // D06: Excel'in sakladığı değer de tam gün olmalı (saat dilimine göre kesir eklenmemeli, gün kaymamalı).
+  const seri = ws => XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, cellDates: false });
+  const gun = (y, m, d) => Date.UTC(y, m, d) / 864e5 + 25569;
+  const serial = seri(XLSX.read(readFileSync(g.cikti)).Sheets['ACME Müşteri']);
+  assert.equal(serial[1][2], gun(2026, 2, 2)); assert.equal(serial[2][2], gun(2026, 2, 16));
+  const mSerial = seri(XLSX.read(readFileSync(m.cikti)).Sheets['Sayfa 1']);
+  assert.ok(Number.isInteger(mSerial[1][2]) && Number.isInteger(mSerial[2][2]), 'maskeli tarih tam gün');
+
+  // D14: CSV çıktısında ayırıcı içeren değer tırnaklanır; dosya yeniden okununca sütunlar kaymaz.
+  const csv = path.join(dir, 'raf.csv');
+  writeFileSync(csv, 'Sorumlu;Not;Adet\nSelin Aksoy;"Raf A; Raf B";4\nKerem Tan;"çok ""acil""\nikinci satır";7\n');
+  const mc = await call('maskele_dosya', { dosya: csv, sutunlar: [{ baslik: 'Sorumlu', islem: 'tag' }] });
+  const back2 = S.parseTable(readFileSync(mc.cikti, 'utf8'));
+  assert.deepEqual(back2[1].slice(1), ['Raf A; Raf B', '4']);
+  assert.equal(back2[0].length, 3); assert.equal(back2.length, 3); assert.equal(back2[2][1], 'çok "acil"\nikinci satır');
 
   const k = await call('anahtar_ozeti', {});
   assert.equal(k.sifreli, true);
